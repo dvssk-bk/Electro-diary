@@ -15,11 +15,13 @@ import {
   Star,
 } from 'lucide-react'
 import { AppShell } from '../components/AppShell'
+import { DisciplinePicker } from '../components/DisciplinePicker'
 import { SubmitDialog } from '../components/SubmitDialog'
 import { ReviewDrawer } from '../components/ReviewDrawer'
 import { EmptyState, ErrorBox, Spinner } from '../components/Feedback'
 import { GradeBadge } from '../components/GradeBadge'
 import { useAuth } from '../context/AuthContext'
+import { useDisciplines } from '../context/DisciplineContext'
 import { backend } from '../lib/api'
 import { formatDate, formatDateTime, formatSize, plural } from '../lib/format'
 import { gradeLabel, isOverdue } from '../lib/grades'
@@ -29,6 +31,7 @@ type Filter = 'all' | 'todo' | 'sent' | 'graded'
 
 export function StudentAssignmentsPage() {
   const { profile } = useAuth()
+  const { active, loading: disciplinesLoading } = useDisciplines()
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [loading, setLoading] = useState(true)
@@ -40,26 +43,32 @@ export function StudentAssignmentsPage() {
   const [refreshKey, setRefreshKey] = useState(0)
 
   const load = useCallback(async () => {
-    if (!profile?.group_name) return
+    if (!active) {
+      setAssignments([])
+      setSubmissions([])
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setError('')
     try {
-      const [assignmentList, submissionList] = await Promise.all([
-        backend.assignments.list(profile.group_name),
+      const [assignmentList, allSubmissions] = await Promise.all([
+        backend.assignments.list(active.id),
         backend.submissions.mine(),
       ])
+      const assignmentIds = new Set(assignmentList.map((assignment) => assignment.id))
       setAssignments(assignmentList)
-      setSubmissions(submissionList)
+      setSubmissions(allSubmissions.filter((submission) => assignmentIds.has(submission.assignment_id)))
     } catch (err) {
       setError((err as Error).message)
     } finally {
       setLoading(false)
     }
-  }, [profile?.group_name])
+  }, [active])
 
   useEffect(() => {
-    load()
-  }, [load, refreshKey])
+    if (!disciplinesLoading) void load()
+  }, [load, refreshKey, disciplinesLoading])
 
   const byAssignment = useMemo(() => {
     const map = new Map<string, Submission>()
@@ -90,10 +99,10 @@ export function StudentAssignmentsPage() {
     return {
       studentName: profile?.full_name,
       assignmentTitle: assignment?.title,
-      groupName: profile?.group_name ?? undefined,
+      groupName: active?.group_name,
       gradeType: assignment?.grade_type,
     }
-  }, [reviewId, submissions, assignments, profile])
+  }, [reviewId, submissions, assignments, profile, active])
 
   if (!profile?.group_name) {
     return (
@@ -105,12 +114,18 @@ export function StudentAssignmentsPage() {
 
   return (
     <AppShell role="student">
+      {disciplinesLoading ? (
+        <Spinner label="Загружаем дисциплины…" />
+      ) : !active ? (
+        <DisciplinePicker role="student" />
+      ) : (
+        <>
       <div className="page-head">
         <div>
           <span className="eyebrow">Учебные работы</span>
-          <h1>Мои задания</h1>
+          <h1>{active.name} · мои задания</h1>
           <p>
-            Группа {profile.group_name} · сдано {submittedCount} из{' '}
+            Группа {active.group_name} · сдано {submittedCount} из{' '}
             {assignments.length} {plural(assignments.length, ['задания', 'заданий', 'заданий'])}
           </p>
         </div>
@@ -361,6 +376,8 @@ export function StudentAssignmentsPage() {
         onClose={() => setReviewId(null)}
         onChanged={() => setRefreshKey((value) => value + 1)}
       />
+        </>
+      )}
     </AppShell>
   )
 }

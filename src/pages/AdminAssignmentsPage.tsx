@@ -9,22 +9,24 @@ import {
   FolderOpen,
   RefreshCw,
   Search,
-  Users,
 } from 'lucide-react'
 import { AppShell } from '../components/AppShell'
+import { DisciplinePicker } from '../components/DisciplinePicker'
 import { ReviewDrawer } from '../components/ReviewDrawer'
 import { EmptyState, ErrorBox, Spinner } from '../components/Feedback'
 import { GradeBadge } from '../components/GradeBadge'
+import { useAuth } from '../context/AuthContext'
+import { useDisciplines } from '../context/DisciplineContext'
 import { useToast } from '../context/ToastContext'
 import { backend } from '../lib/api'
 import { formatDateTime, formatSize, plural } from '../lib/format'
 import { isOverdue } from '../lib/grades'
-import type { Assignment, Group, Profile, WorkRow } from '../lib/types'
+import type { Assignment, Profile, WorkRow } from '../lib/types'
 
 export function AdminAssignmentsPage() {
   const toast = useToast()
-  const [groups, setGroups] = useState<Group[]>([])
-  const [groupName, setGroupName] = useState('')
+  const { profile } = useAuth()
+  const { active, loading: disciplinesLoading } = useDisciplines()
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [students, setStudents] = useState<Profile[]>([])
   const [rows, setRows] = useState<WorkRow[]>([])
@@ -36,27 +38,8 @@ export function AdminAssignmentsPage() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [review, setReview] = useState<WorkRow | null>(null)
 
-  useEffect(() => {
-    backend.groups
-      .list()
-      .then((list) => {
-        setGroups(list)
-        setGroupName((current) => {
-          if (current && list.some((group) => group.name === current)) return current
-          const saved = localStorage.getItem('diary_admin_group')
-          if (saved && list.some((group) => group.name === saved)) return saved
-          return list[0]?.name ?? ''
-        })
-      })
-      .catch((err: Error) => setError(err.message))
-  }, [])
-
-  useEffect(() => {
-    if (groupName) localStorage.setItem('diary_admin_group', groupName)
-  }, [groupName])
-
   const load = useCallback(async () => {
-    if (!groupName) {
+    if (!active) {
       setRows([])
       setAssignments([])
       setStudents([])
@@ -66,13 +49,13 @@ export function AdminAssignmentsPage() {
     setLoading(true)
     setError('')
     try {
-      // Срок хранения истёкших файлов проверяем при открытии раздела:
-      // отдельного серверного планировщика у статического GitHub Pages нет.
+      // Файлы оценённых работ удаляются сразу после подтверждения проверки.
+      // Повторная уборка при открытии раздела удаляет остатки старых версий.
       await backend.submissions.cleanupReviewedFiles().catch(() => undefined)
       const [assignmentList, studentList, workRows] = await Promise.all([
-        backend.assignments.list(groupName),
-        backend.students(groupName),
-        backend.submissions.list(groupName),
+        backend.assignments.list(active.id),
+        backend.students(active.group_name),
+        backend.submissions.list(active.id),
       ])
       setAssignments(assignmentList)
       setStudents(studentList)
@@ -82,17 +65,17 @@ export function AdminAssignmentsPage() {
     } finally {
       setLoading(false)
     }
-  }, [groupName])
+  }, [active])
 
   useEffect(() => {
-    load()
-  }, [load, refreshKey])
+    if (!disciplinesLoading) void load()
+  }, [load, refreshKey, disciplinesLoading])
 
   useEffect(() => {
     setAssignmentFilter('')
     setStudentFilter('')
     setSearch('')
-  }, [groupName])
+  }, [active?.id])
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -109,68 +92,48 @@ export function AdminAssignmentsPage() {
     })
   }, [rows, assignmentFilter, studentFilter, search])
 
-  const reviewMeta = review
-    ? {
-        studentName: review.student.full_name,
-        assignmentTitle: review.assignment.title,
-        groupName,
-        gradeType: review.assignment.grade_type,
-      }
-    : undefined
+  const reviewMeta =
+    review && active
+      ? {
+          studentName: review.student.full_name,
+          assignmentTitle: review.assignment.title,
+          groupName: active.group_name,
+          gradeType: review.assignment.grade_type,
+        }
+      : undefined
 
   return (
     <AppShell role="admin">
-      <div className="page-head">
-        <div>
-          <span className="eyebrow">Проверка работ</span>
-          <h1>Задания группы {groupName || '—'}</h1>
-          <p>Ксения Андреевна · последние отправленные работы сверху</p>
-        </div>
-        <div className="page-head__actions">
-          <label className="group-switch">
-            <Users size={16} />
-            <span>Группа</span>
-            <select
-              value={groupName}
-              onChange={(event) => setGroupName(event.target.value)}
-              disabled={!groups.length}
-              data-testid="admin-works-group-select"
-            >
-              {!groups.length ? <option value="">Нет групп</option> : null}
-              {groups.map((group) => (
-                <option key={group.name} value={group.name}>
-                  {group.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            className="btn btn--ghost btn--sm"
-            onClick={() => setRefreshKey((value) => value + 1)}
-            disabled={loading}
-          >
-            <RefreshCw className={loading ? 'spin' : ''} size={16} /> Обновить
-          </button>
-          <Link to="/admin/journal" className="btn btn--primary btn--sm">
-            <BookOpenCheck size={16} /> К журналу
-          </Link>
-        </div>
-      </div>
-
-      {!groups.length ? (
-        <EmptyState
-          icon={<Users size={30} />}
-          title="Нет групп"
-          text="Создайте группу — после этого студенты смогут регистрироваться и сдавать работы."
-          action={
-            <Link to="/admin/groups" className="btn btn--primary btn--sm">
-              Создать группу
-            </Link>
-          }
-        />
+      {disciplinesLoading ? (
+        <Spinner label="Загружаем дисциплины…" />
+      ) : !active ? (
+        <DisciplinePicker role="admin" />
       ) : (
         <>
+          <div className="page-head">
+            <div>
+              <span className="eyebrow">Проверка работ</span>
+              <h1>Задания · {active.name}</h1>
+              <p>
+                {profile?.full_name || active.teacher_name} · группа {active.group_name} ·
+                последние отправленные работы сверху
+              </p>
+            </div>
+            <div className="page-head__actions">
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                onClick={() => setRefreshKey((value) => value + 1)}
+                disabled={loading}
+              >
+                <RefreshCw className={loading ? 'spin' : ''} size={16} /> Обновить
+              </button>
+              <Link to="/admin/journal" className="btn btn--primary btn--sm">
+                <BookOpenCheck size={16} /> К журналу
+              </Link>
+            </div>
+          </div>
+
           <div className="works-stats">
             <div>
               <strong>{rows.length}</strong>
@@ -365,20 +328,20 @@ export function AdminAssignmentsPage() {
               }
             />
           )}
+
+          <ReviewDrawer
+            open={Boolean(review)}
+            submissionId={review?.submission.id ?? null}
+            mode="admin"
+            meta={reviewMeta}
+            onClose={() => setReview(null)}
+            onChanged={() => {
+              setRefreshKey((value) => value + 1)
+              toast.notify('Данные работы обновлены')
+            }}
+          />
         </>
       )}
-
-      <ReviewDrawer
-        open={Boolean(review)}
-        submissionId={review?.submission.id ?? null}
-        mode="admin"
-        meta={reviewMeta}
-        onClose={() => setReview(null)}
-        onChanged={() => {
-          setRefreshKey((value) => value + 1)
-          toast.notify('Данные работы обновлены')
-        }}
-      />
     </AppShell>
   )
 }

@@ -2,13 +2,16 @@
 import type {
   Annotation,
   Assignment,
+  Discipline,
   Group,
   JournalData,
   NewAssignment,
+  NewDiscipline,
   Profile,
   StudentCredentials,
   Submission,
   SubmissionVersion,
+  TeacherRegistration,
   UploadProgress,
   WorkRow,
 } from './types'
@@ -16,7 +19,6 @@ import type { AnnotationInput, Backend, SubmissionFilters } from './backend'
 import { supabase, supabaseAnonKey, supabaseUrl } from './supabase'
 import { extensionOf, safeMime, sanitizeFileName } from './fileTypes'
 import { validateGrade } from './grades'
-import { retentionCutoff } from './retention'
 
 function client(): SupabaseClient {
   if (!supabase) throw new Error('Supabase не настроен')
@@ -51,6 +53,31 @@ async function requireStudent(): Promise<Profile> {
   const profile = await requireProfile()
   if (profile.role !== 'student') throw new Error('Действие доступно только студенту')
   return profile
+}
+
+interface OwnedDiscipline {
+  id: string
+  name: string
+  group_name: string
+  teacher_id: string
+}
+
+async function loadOwnedDiscipline(
+  disciplineId: string,
+  teacherId: string,
+): Promise<OwnedDiscipline> {
+  const { data, error } = await client()
+    .from('disciplines')
+    .select('id, name, group_name, teacher_id')
+    .eq('id', disciplineId)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  const discipline = data as OwnedDiscipline | null
+  if (!discipline) throw new Error('Дисциплина не найдена')
+  if (discipline.teacher_id !== teacherId) {
+    throw new Error('Можно работать только со своей дисциплиной')
+  }
+  return discipline
 }
 
 function readableAuthError(message: string): string {
@@ -119,6 +146,60 @@ async function removeStorageObject(path: string): Promise<void> {
   } catch {
     // Не критично: файл мог быть уже удалён.
   }
+}
+
+async function deleteFilesForSubmission(submissionId: string): Promise<boolean> {
+  const db = client()
+  const [submissionResult, versionsResult] = await Promise.all([
+    db.from('submissions').select('file_path').eq('id', submissionId).maybeSingle(),
+    db.from('submission_versions').select('file_path').eq('submission_id', submissionId),
+  ])
+  if (submissionResult.error) throw new Error(submissionResult.error.message)
+  if (versionsResult.error) throw new Error(versionsResult.error.message)
+
+  const paths = [
+    ...new Set(
+      [
+        (submissionResult.data as { file_path: string | null } | null)?.file_path ?? null,
+        ...((versionsResult.data ?? []) as { file_path: string | null }[]).map(
+          (version) => version.file_path,
+        ),
+      ].filter((path): path is string => Boolean(path)),
+    ),
+  ]
+  if (!paths.length) return false
+
+  const { error: storageError } = await db.storage.from('submissions').remove(paths)
+  if (storageError) throw new Error(storageError.message)
+
+  const deletedAt = new Date().toISOString()
+  const { error: submissionError } = await db
+    .from('submissions')
+    .update({ file_path: null, file_deleted_at: deletedAt })
+    .eq('id', submissionId)
+  if (submissionError) throw new Error(submissionError.message)
+
+  const { error: versionsError } = await db
+    .from('submission_versions')
+    .update({ file_path: null, file_deleted_at: deletedAt })
+    .eq('submission_id', submissionId)
+  if (versionsError) throw new Error(versionsError.message)
+  return true
+}
+
+async function edgeFunctionError(error: unknown, fallback: string): Promise<string> {
+  const source = error as { message?: string; context?: Response }
+  let message = source?.message || fallback
+  const context = source?.context
+  if (context && typeof context.json === 'function') {
+    try {
+      const body = (await context.json()) as { error?: string }
+      if (body?.error) message = body.error
+    } catch {
+      // ignore
+    }
+  }
+  return message
 }
 
 async function storeSubmission(
@@ -280,6 +361,61 @@ export const supabaseBackend: Backend = {
       if (data?.error) throw new Error(data.error as string)
       return data as StudentCredentials
     },
+    async registerTeacher(fullName, password): Promise<TeacherRegistration> {
+      const { data, error } = await client().functions.invoke('register-teacher', {
+        body: { fullName, password },
+      })
+      if (error) {
+        let message = await edgeFunctionError(error, 'Не удалось создать кабинет преподавателя')
+        if (/Failed to send a request|not found|404/i.test(message)) {
+          message =
+            'Сервис регистрации преподавателей не задеплоен. Задеплойте Edge Function «register-teacher» (см. README).'
+        }
+        throw new Error(message)
+      }
+      if (data?.error) throw new Error(data.error as string)
+      const login = String(data?.login ?? '').trim()
+      if (!login) throw new Error('Сервис регистрации не вернул логин')
+      const profile = await supabaseBackend.auth.signIn(login, password)
+      return { profile, login }
+    },
+  },
+
+  disciplines: {
+    async list(): Promise<Discipline[]> {
+      const { data, error } = await client()
+        .from('discipline_catalog')
+        .select('id, name, group_name, teacher_id, teacher_name, created_at')
+        .order('group_name')
+        .order('name')
+      if (error) throw new Error(error.message)
+      return (data ?? []) as Discipline[]
+    },
+    async create(input: NewDiscipline): Promise<Discipline> {
+      const admin = await requireAdmin()
+      const name = input.name.trim().replace(/\s+/g, ' ')
+      const groupName = input.groupName.trim()
+      if (!name || name.length > 150) {
+        throw new Error('Название дисциплины должно быть длиной от 1 до 150 символов')
+      }
+      const { data, error } = await client()
+        .from('disciplines')
+        .insert({
+          name,
+          group_name: groupName,
+          teacher_id: admin.id,
+        })
+        .select('id, name, group_name, teacher_id, created_at')
+        .single()
+      if (error) {
+        throw new Error(
+          error.code === '23505'
+            ? 'Такая дисциплина уже есть у этой группы'
+            : error.message,
+        )
+      }
+      return { ...(data as Omit<Discipline, 'teacher_name'>), teacher_name: admin.full_name }
+    },
   },
 
   groups: {
@@ -328,29 +464,31 @@ export const supabaseBackend: Backend = {
   },
 
   assignments: {
-    async list(groupName: string) {
+    async list(disciplineId: string) {
       const { data, error } = await client()
         .from('assignments')
         .select('*')
-        .eq('group_name', groupName)
+        .eq('discipline_id', disciplineId)
         .order('assigned_date')
         .order('lesson_number')
       if (error) throw new Error(error.message)
       return (data ?? []) as Assignment[]
     },
     async create(input: NewAssignment) {
-      await requireAdmin()
+      const admin = await requireAdmin()
+      const discipline = await loadOwnedDiscipline(input.discipline_id, admin.id)
       const { data, error } = await client()
         .from('assignments')
         .insert({
+          discipline_id: discipline.id,
           title: input.title.trim(),
           description: input.description.trim(),
-          group_name: input.group_name,
+          group_name: discipline.group_name,
+          subject: discipline.name,
           grade_type: input.grade_type || 'stars',
           assigned_date: input.assigned_date,
           lesson_number: input.lesson_number,
           due_at: input.due_at || null,
-          ...(input.subject ? { subject: input.subject } : {}),
         })
         .select('*')
         .single()
@@ -358,18 +496,20 @@ export const supabaseBackend: Backend = {
       return data as Assignment
     },
     async update(id: string, input: NewAssignment) {
-      await requireAdmin()
+      const admin = await requireAdmin()
+      const discipline = await loadOwnedDiscipline(input.discipline_id, admin.id)
       const { data, error } = await client()
         .from('assignments')
         .update({
+          discipline_id: discipline.id,
           title: input.title.trim(),
           description: input.description.trim(),
-          group_name: input.group_name,
+          group_name: discipline.group_name,
+          subject: discipline.name,
           grade_type: input.grade_type || 'stars',
           assigned_date: input.assigned_date,
           lesson_number: input.lesson_number,
           due_at: input.due_at || null,
-          ...(input.subject ? { subject: input.subject } : {}),
         })
         .eq('id', id)
         .select('*')
@@ -403,18 +543,31 @@ export const supabaseBackend: Backend = {
         }
       }
 
+      // Сначала удаляем объекты, пока строки сдач и версий ещё существуют:
+      // политика Storage проверяет путь по этим строкам. Если удалить задание
+      // первым, каскад уберёт строки и файлы навсегда останутся в бакете.
+      const uniquePaths = [...new Set(paths)].filter(Boolean)
+      if (uniquePaths.length) {
+        const { error: storageError } = await db.storage.from('submissions').remove(uniquePaths)
+        if (storageError) throw new Error(storageError.message)
+      }
+
       const { error } = await db.from('assignments').delete().eq('id', id)
       if (error) throw new Error(error.message)
-      const uniquePaths = [...new Set(paths)]
-      if (uniquePaths.length) await db.storage.from('submissions').remove(uniquePaths)
     },
   },
 
-  async journal(groupName?: string): Promise<JournalData> {
-    const profile = await requireProfile()
+  async journal(disciplineId: string): Promise<JournalData> {
+    await requireProfile()
     const db = client()
-    const group = profile.role === 'admin' ? groupName ?? '' : profile.group_name ?? ''
-    if (!group) return { assignments: [], students: [], entries: [] }
+    const { data: discipline, error: disciplineError } = await db
+      .from('disciplines')
+      .select('id, name, group_name, teacher_id')
+      .eq('id', disciplineId)
+      .maybeSingle()
+    if (disciplineError) throw new Error(disciplineError.message)
+    if (!discipline) throw new Error('Дисциплина не найдена')
+    const group = (discipline as { group_name: string }).group_name
 
     const [studentsResult, assignmentsResult] = await Promise.all([
       db
@@ -426,7 +579,7 @@ export const supabaseBackend: Backend = {
       db
         .from('assignments')
         .select('*')
-        .eq('group_name', group)
+        .eq('discipline_id', disciplineId)
         .order('assigned_date')
         .order('lesson_number'),
     ])
@@ -521,15 +674,16 @@ export const supabaseBackend: Backend = {
       if (error) throw new Error(error.message)
       return (data ?? []) as Submission[]
     },
-    async list(groupName: string, filters: SubmissionFilters = {}): Promise<WorkRow[]> {
-      await requireAdmin()
+    async list(disciplineId: string, filters: SubmissionFilters = {}): Promise<WorkRow[]> {
+      const admin = await requireAdmin()
+      const discipline = await loadOwnedDiscipline(disciplineId, admin.id)
       const db = client()
       const [assignmentsResult, studentsResult] = await Promise.all([
-        db.from('assignments').select('*').eq('group_name', groupName),
+        db.from('assignments').select('*').eq('discipline_id', disciplineId),
         db
           .from('profiles')
           .select('id, full_name, group_name, role')
-          .eq('group_name', groupName)
+          .eq('group_name', discipline.group_name)
           .eq('role', 'student'),
       ])
       if (assignmentsResult.error) throw new Error(assignmentsResult.error.message)
@@ -590,57 +744,64 @@ export const supabaseBackend: Backend = {
       if (submission.student_id !== profile.id) throw new Error('Это чужая работа')
       return storeSubmission(profile, submission.assignment_id, file, onProgress)
     },
-    async setGrade(submissionId: string, grade: number | null) {
-      await requireAdmin()
-      if (grade != null) {
-        const { data: submission, error: submissionError } = await client()
-          .from('submissions')
-          .select('assignment_id, grade')
-          .eq('id', submissionId)
-          .single()
-        if (submissionError) throw new Error(submissionError.message)
-        const { data: assignment, error: assignmentError } = await client()
-          .from('assignments')
-          .select('grade_type')
-          .eq('id', (submission as { assignment_id: string }).assignment_id)
-          .single()
-        if (assignmentError) throw new Error(assignmentError.message)
-        const message = validateGrade(
-          (assignment as { grade_type: string | null }).grade_type,
-          grade,
-        )
-        if (message) throw new Error(message)
+    async setGrade(
+      submissionId: string,
+      grade: number | null,
+      options: { deleteFiles?: boolean } = {},
+    ) {
+      const admin = await requireAdmin()
+      const { data: submission, error: submissionError } = await client()
+        .from('submissions')
+        .select('assignment_id, grade')
+        .eq('id', submissionId)
+        .single()
+      if (submissionError) throw new Error(submissionError.message)
+      const { data: assignment, error: assignmentError } = await client()
+        .from('assignments')
+        .select('grade_type, discipline_id')
+        .eq('id', (submission as { assignment_id: string }).assignment_id)
+        .single()
+      if (assignmentError) throw new Error(assignmentError.message)
+      const disciplineId = (assignment as { discipline_id: string | null }).discipline_id
+      if (!disciplineId) throw new Error('Задание не привязано к дисциплине')
+      await loadOwnedDiscipline(disciplineId, admin.id)
 
-        // Блокируем только первую оценку. Если оценка уже стоит, преподаватель
-        // может её изменить или снять, даже если замечания остались.
-        if ((submission as { grade: number | null }).grade == null) {
-          const { data: lastVersion, error: versionError } = await client()
-            .from('submission_versions')
-            .select('created_at')
-            .eq('submission_id', submissionId)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
-          if (versionError) throw new Error(versionError.message)
+      const message = validateGrade(
+        (assignment as { grade_type: string | null }).grade_type,
+        grade,
+      )
+      if (message) throw new Error(message)
 
-          let annotationQuery = client()
-            .from('annotations')
-            .select('id', { count: 'exact', head: true })
-            .eq('submission_id', submissionId)
-          const latestVersionAt = (lastVersion as { created_at?: string } | null)?.created_at
-          if (latestVersionAt) {
-            annotationQuery = annotationQuery.gt('created_at', latestVersionAt)
-          }
-          const { count, error: annotationError } = await annotationQuery
-          if (annotationError) throw new Error(annotationError.message)
-          if ((count ?? 0) > 0) {
-            throw new Error(
-              'Сначала исправьте замечания: пока они активны, оценку ставить нельзя',
-            )
-          }
+      // Блокируем только первую оценку. Если оценка уже стоит, преподаватель
+      // может её изменить или снять, даже если замечания остались.
+      if (grade != null && (submission as { grade: number | null }).grade == null) {
+        const { data: lastVersion, error: versionError } = await client()
+          .from('submission_versions')
+          .select('created_at')
+          .eq('submission_id', submissionId)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (versionError) throw new Error(versionError.message)
+
+        let annotationQuery = client()
+          .from('annotations')
+          .select('id', { count: 'exact', head: true })
+          .eq('submission_id', submissionId)
+        const latestVersionAt = (lastVersion as { created_at?: string } | null)?.created_at
+        if (latestVersionAt) {
+          annotationQuery = annotationQuery.gt('created_at', latestVersionAt)
+        }
+        const { count, error: annotationError } = await annotationQuery
+        if (annotationError) throw new Error(annotationError.message)
+        if ((count ?? 0) > 0) {
+          throw new Error(
+            'Сначала исправьте замечания: пока они активны, оценку ставить нельзя',
+          )
         }
       }
-      const { error } = await client()
+
+      const { data, error } = await client()
         .from('submissions')
         .update({
           grade,
@@ -648,7 +809,24 @@ export const supabaseBackend: Backend = {
           reviewed_at: grade != null ? new Date().toISOString() : null,
         })
         .eq('id', submissionId)
+        .select('*')
+        .single()
       if (error) throw new Error(error.message)
+      let updated = data as Submission
+
+      if (grade != null && options.deleteFiles) {
+        const deleted = await deleteFilesForSubmission(submissionId)
+        if (deleted) {
+          const { data: refreshed, error: refreshError } = await client()
+            .from('submissions')
+            .select('*')
+            .eq('id', submissionId)
+            .single()
+          if (refreshError) throw new Error(refreshError.message)
+          updated = refreshed as Submission
+        }
+      }
+      return updated
     },
     async markSubmitted(assignmentId: string, studentId: string) {
       await requireAdmin()
@@ -698,10 +876,16 @@ export const supabaseBackend: Backend = {
         ...((versions ?? []) as { file_path: string }[]).map((version) => version.file_path),
       ]
 
+      const uniquePaths = [...new Set(paths)].filter(Boolean)
+      if (uniquePaths.length) {
+        // Удаляем объекты до строки сдачи: иначе политика Storage уже не сможет
+        // сопоставить путь с работой и откажет в удалении.
+        const { error: storageError } = await db.storage.from('submissions').remove(uniquePaths)
+        if (storageError) throw new Error(storageError.message)
+      }
+
       const { error } = await db.from('submissions').delete().eq('id', submissionId)
       if (error) throw new Error(error.message)
-      const uniquePaths = [...new Set(paths)].filter(Boolean)
-      if (uniquePaths.length) await db.storage.from('submissions').remove(uniquePaths)
     },
     async versions(submissionId: string) {
       const { data, error } = await client()
@@ -732,14 +916,11 @@ export const supabaseBackend: Backend = {
     async cleanupReviewedFiles() {
       await requireAdmin()
       const db = client()
-      const cutoff = new Date(retentionCutoff()).toISOString()
 
       const { data, error } = await db
         .from('submissions')
         .select('id, file_path')
         .not('grade', 'is', null)
-        .not('reviewed_at', 'is', null)
-        .lte('reviewed_at', cutoff)
         .is('file_deleted_at', null)
       if (error) throw new Error(error.message)
 
@@ -749,9 +930,21 @@ export const supabaseBackend: Backend = {
 
       const { data: versionData, error: versionError } = await db
         .from('submission_versions')
-        .select('id, file_path')
+        .select('submission_id, file_path')
         .in('submission_id', submissionIds)
       if (versionError) throw new Error(versionError.message)
+
+      const withFiles = new Set<string>()
+      for (const row of rows) {
+        if (row.file_path) withFiles.add(row.id)
+      }
+      for (const version of (versionData ?? []) as {
+        submission_id: string
+        file_path: string | null
+      }[]) {
+        if (version.file_path) withFiles.add(version.submission_id)
+      }
+      if (!withFiles.size) return 0
 
       const paths = [
         ...new Set(
@@ -772,19 +965,20 @@ export const supabaseBackend: Backend = {
       }
 
       const deletedAt = new Date().toISOString()
+      const ids = [...withFiles]
       const { error: updateError } = await db
         .from('submissions')
         .update({ file_path: null, file_deleted_at: deletedAt })
-        .in('id', submissionIds)
+        .in('id', ids)
       if (updateError) throw new Error(updateError.message)
 
       const { error: versionsError } = await db
         .from('submission_versions')
         .update({ file_path: null, file_deleted_at: deletedAt })
-        .in('submission_id', submissionIds)
+        .in('submission_id', ids)
       if (versionsError) throw new Error(versionsError.message)
 
-      return submissionIds.length
+      return ids.length
     },
   },
 

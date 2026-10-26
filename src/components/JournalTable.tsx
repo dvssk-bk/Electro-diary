@@ -11,7 +11,6 @@ import {
   UserRoundPlus,
 } from 'lucide-react'
 import type { Assignment, JournalData, JournalEntry, Profile } from '../lib/types'
-import { defaultSubject } from '../lib/supabase'
 import { formatDate, formatDateShort, formatDateTime } from '../lib/format'
 import { gradeLabel, gradeRatio, isOverdue } from '../lib/grades'
 import { GradeBadge } from './GradeBadge'
@@ -20,7 +19,9 @@ type SortMode = 'name-asc' | 'name-desc' | 'performance'
 
 interface JournalTableProps {
   data: JournalData
+  disciplineName: string
   groupName: string
+  teacherName: string
   mode: 'student' | 'admin'
   currentStudentId?: string
   onOpenSubmission?: (submissionId: string) => void
@@ -36,10 +37,7 @@ function splitName(fullName: string): { surname: string; rest: string } {
   if (parts.length === 1) return { surname: fullName, rest: '' }
   return {
     surname: parts[0],
-    rest: parts
-      .slice(1)
-      .map((part) => `${part[0]}.`)
-      .join(' '),
+    rest: parts.slice(1).join(' '),
   }
 }
 
@@ -49,7 +47,9 @@ function entryKey(assignmentId: string, studentId: string): string {
 
 export function JournalTable({
   data,
+  disciplineName,
   groupName,
+  teacherName,
   mode,
   currentStudentId,
   onOpenSubmission,
@@ -139,10 +139,10 @@ export function JournalTable({
         <div className="journal-card__title">
           <div>
             <span className="eyebrow">Рапортичка</span>
-            <h2>{data.assignments[0]?.subject || defaultSubject}</h2>
+            <h2>{disciplineName}</h2>
             <p>
-              Группа <strong>{groupName || '—'}</strong> · преподаватель Ксения
-              Андреевна
+              Группа <strong>{groupName || '—'}</strong> · преподаватель{' '}
+              <strong>{teacherName || '—'}</strong>
             </p>
           </div>
         </div>
@@ -205,189 +205,177 @@ export function JournalTable({
       ) : null}
 
       <div className="journal-scroll">
-        <table className="journal-table">
+        <table className="journal-table journal-table--students">
           <thead>
             <tr>
-              <th className="task-col">Задание</th>
-              {students.map((student) => {
-                const stat = statsByStudent.get(student.id)
-                const isOwn = student.id === currentStudentId
-                const { surname, rest } = splitName(student.full_name)
-                return (
-                  <th
-                    key={student.id}
-                    className={`student-col ${isOwn ? 'is-own' : ''}`}
-                    title={student.full_name}
-                  >
-                    <span className="student-col__name">{surname}</span>
-                    <span className="student-col__rest">{rest}</span>
-                    <span className="student-col__count">{stat?.submitted ?? 0} сдано</span>
-                    {isOwn ? <span className="student-col__you">вы</span> : null}
-                  </th>
-                )
-              })}
-              <th className="date-col">
-                <CalendarDays size={14} /> Выдано
-              </th>
+              <th className="student-col">Студент</th>
+              {data.assignments.map((assignment, index) => (
+                <th key={assignment.id} className="assignment-col" scope="col">
+                  <div className="assignment-head">
+                    <span className="assignment-head__top">
+                      <span className="task-cell__index">
+                        {String(index + 1).padStart(2, '0')}
+                      </span>
+                      {mode === 'admin' ? (
+                        <span className="assignment-head__actions">
+                          <button
+                            type="button"
+                            className="mini-icon-btn"
+                            title="Редактировать задание"
+                            aria-label="Редактировать задание"
+                            onClick={() => onEditAssignment?.(assignment)}
+                          >
+                            <Pencil size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            className="mini-icon-btn mini-icon-btn--danger"
+                            title="Удалить задание"
+                            aria-label="Удалить задание"
+                            onClick={() => onDeleteAssignment?.(assignment)}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="assignment-head__title" title={assignment.title}>
+                      {assignment.title}
+                    </span>
+                    {assignment.description ? (
+                      <span className="assignment-head__desc">{assignment.description}</span>
+                    ) : null}
+                    <span className="assignment-head__meta">
+                      <span title={formatDate(assignment.assigned_date)}>
+                        <CalendarDays size={11} /> {formatDateShort(assignment.assigned_date)}
+                      </span>
+                      <span className="lesson-chip" title={`${assignment.lesson_number} пара`}>
+                        {assignment.lesson_number} пара
+                      </span>
+                    </span>
+                    {assignment.due_at ? (
+                      <span
+                        className={`assignment-head__due ${
+                          isOverdue(assignment.due_at) ? 'is-overdue' : ''
+                        }`}
+                        title={`Дедлайн: ${formatDateTime(assignment.due_at)}`}
+                      >
+                        <Clock3 size={11} /> до {formatDateTime(assignment.due_at)}
+                      </span>
+                    ) : null}
+                  </div>
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {data.assignments.length === 0 ? (
               <tr>
-                <td className="journal-placeholder" colSpan={students.length + 2}>
-                  Заданий пока нет. {mode === 'admin' ? 'Добавьте первое задание.' : 'Скоро появятся.'}
+                <td className="journal-placeholder" colSpan={1}>
+                  Заданий пока нет.{' '}
+                  {mode === 'admin' ? 'Добавьте первое задание.' : 'Скоро появятся.'}
                 </td>
               </tr>
             ) : null}
-            {data.assignments.map((assignment, rowIndex) => (
-              <tr key={assignment.id}>
-                <th className="task-col" scope="row">
-                  <div className="task-cell">
-                    <span className="task-cell__index">{String(rowIndex + 1).padStart(2, '0')}</span>
-                    <div className="task-cell__text">
-                      <span className="task-cell__title" title={assignment.title}>
-                        {assignment.title}
-                      </span>
-                      {assignment.description ? (
-                        <span className="task-cell__desc">{assignment.description}</span>
-                      ) : null}
-                      {assignment.due_at ? (
-                        <span
-                          className={`task-cell__due ${
-                            isOverdue(assignment.due_at) ? 'is-overdue' : ''
-                          }`}
-                          title={`Дедлайн: ${formatDateTime(assignment.due_at)}`}
-                        >
-                          <Clock3 size={11} /> до {formatDateTime(assignment.due_at)}
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                </th>
-                {students.map((student) => {
-                  const entry = entryMap.get(entryKey(assignment.id, student.id)) ?? null
-                  const isOwn = student.id === currentStudentId
-                  const isAdmin = mode === 'admin'
-                  const canSubmit = !isAdmin && isOwn && !entry
-                  const overdue = isOverdue(assignment.due_at)
-                  const showUrgent = overdue && !entry && (isAdmin || isOwn)
-                  const hasRemarks = Boolean(
-                    entry &&
-                      entry.grade == null &&
-                      entry.annotation_count > 0 &&
-                      (isAdmin || isOwn),
-                  )
-                  return (
-                    <td
-                      key={student.id}
-                      className={`journal-cell ${isOwn ? 'is-own' : ''} ${
-                        isAdmin || (isOwn && (entry || canSubmit)) ? 'is-clickable' : ''
-                      }`}
-                      onClick={() => handleCell(student, assignment, entry)}
-                      title={
-                        showUrgent
-                          ? `Дедлайн прошёл: ${formatDateTime(assignment.due_at)}`
-                          : hasRemarks
-                            ? `Замечаний: ${entry?.annotation_count ?? 0} — нужно исправить`
-                            : isAdmin
-                              ? 'Изменить отметку'
-                              : canSubmit
-                                ? 'Сдать работу'
-                                : entry?.grade != null
-                                  ? `Оценка: ${gradeLabel(
-                                      assignment.grade_type,
-                                      entry.grade,
-                                    )}`
-                                  : entry
-                                    ? 'Работа сдана'
-                                    : ''
-                      }
-                    >
-                      {entry ? (
-                        hasRemarks ? (
-                          <span className="journal-cell__status">
-                            {entry.grade != null ? (
-                              <GradeBadge
-                                grade={entry.grade}
-                                type={assignment.grade_type}
-                                variant="cell"
-                              />
-                            ) : null}
-                            <span
-                              className="revise-cell"
-                              data-testid={`revise-cell-${assignment.id}-${student.id}`}
-                            >
-                              Исправить
+            {students.map((student) => {
+              const stat = statsByStudent.get(student.id)
+              const isOwn = student.id === currentStudentId
+              const { surname, rest } = splitName(student.full_name)
+              return (
+                <tr key={student.id} className={isOwn ? 'is-own' : ''}>
+                  <th className="student-col" scope="row" title={student.full_name}>
+                    <span className="student-col__name">{rest || surname}</span>
+                    <span className="student-col__rest">{surname}</span>
+                    <span className="student-col__count">
+                      {stat?.submitted ?? 0} из {data.assignments.length} сдано
+                    </span>
+                    {isOwn ? <span className="student-col__you">вы</span> : null}
+                  </th>
+                  {data.assignments.map((assignment) => {
+                    const entry = entryMap.get(entryKey(assignment.id, student.id)) ?? null
+                    const isAdmin = mode === 'admin'
+                    const canSubmit = !isAdmin && isOwn && !entry
+                    const overdue = isOverdue(assignment.due_at)
+                    const showUrgent = overdue && !entry && (isAdmin || isOwn)
+                    const hasRemarks = Boolean(
+                      entry &&
+                        entry.grade == null &&
+                        entry.annotation_count > 0 &&
+                        (isAdmin || isOwn),
+                    )
+                    return (
+                      <td
+                        key={assignment.id}
+                        className={`journal-cell ${isOwn ? 'is-own' : ''} ${
+                          isAdmin || (isOwn && (entry || canSubmit)) ? 'is-clickable' : ''
+                        }`}
+                        onClick={() => handleCell(student, assignment, entry)}
+                        title={
+                          showUrgent
+                            ? `Дедлайн прошёл: ${formatDateTime(assignment.due_at)}`
+                            : hasRemarks
+                              ? `Замечаний: ${entry?.annotation_count ?? 0} — нужно исправить`
+                              : isAdmin
+                                ? 'Изменить отметку'
+                                : canSubmit
+                                  ? 'Сдать работу'
+                                  : entry?.grade != null
+                                    ? `Оценка: ${gradeLabel(
+                                        assignment.grade_type,
+                                        entry.grade,
+                                      )}`
+                                    : entry
+                                      ? 'Работа сдана'
+                                      : ''
+                        }
+                      >
+                        {entry ? (
+                          hasRemarks ? (
+                            <span className="journal-cell__status">
+                              <span
+                                className="revise-cell"
+                                data-testid={`revise-cell-${assignment.id}-${student.id}`}
+                              >
+                                Исправить
+                              </span>
                             </span>
+                          ) : entry.grade != null ? (
+                            <GradeBadge
+                              grade={entry.grade}
+                              type={assignment.grade_type}
+                              variant="cell"
+                            />
+                          ) : (
+                            <span className="mark-plus">+</span>
+                          )
+                        ) : showUrgent ? (
+                          <span
+                            className="urgent-cell"
+                            data-testid={`urgent-cell-${assignment.id}-${student.id}`}
+                          >
+                            Срочно сдать!
                           </span>
-                        ) : entry.grade != null ? (
-                          <GradeBadge
-                            grade={entry.grade}
-                            type={assignment.grade_type}
-                            variant="cell"
-                          />
+                        ) : canSubmit ? (
+                          <button
+                            type="button"
+                            className="submit-cell-btn"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              onSubmitAssignment?.(assignment)
+                            }}
+                            data-testid={`submit-cell-${assignment.id}`}
+                          >
+                            <Plus size={13} /> Сдать
+                          </button>
                         ) : (
-                          <span className="mark-plus">+</span>
-                        )
-                      ) : showUrgent ? (
-                        <span
-                          className="urgent-cell"
-                          data-testid={`urgent-cell-${assignment.id}-${student.id}`}
-                        >
-                          Срочно сдать!
-                        </span>
-                      ) : canSubmit ? (
-                        <button
-                          type="button"
-                          className="submit-cell-btn"
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            onSubmitAssignment?.(assignment)
-                          }}
-                          data-testid={`submit-cell-${assignment.id}`}
-                        >
-                          <Plus size={13} /> Сдать
-                        </button>
-                      ) : (
-                        <span className="cell-empty" aria-label="Не сдано" />
-                      )}
-                    </td>
-                  )
-                })}
-                <td className="date-col">
-                  <div className="date-cell">
-                    <span className="date-cell__date" title={formatDate(assignment.assigned_date)}>
-                      {formatDateShort(assignment.assigned_date)}
-                    </span>
-                    <span className="lesson-chip" title={`${assignment.lesson_number} пара`}>
-                      {assignment.lesson_number}
-                    </span>
-                    {mode === 'admin' ? (
-                      <span className="date-cell__actions">
-                        <button
-                          type="button"
-                          className="mini-icon-btn"
-                          title="Редактировать задание"
-                          aria-label="Редактировать задание"
-                          onClick={() => onEditAssignment?.(assignment)}
-                        >
-                          <Pencil size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          className="mini-icon-btn mini-icon-btn--danger"
-                          title="Удалить задание"
-                          aria-label="Удалить задание"
-                          onClick={() => onDeleteAssignment?.(assignment)}
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </span>
-                    ) : null}
-                  </div>
-                </td>
-              </tr>
-            ))}
+                          <span className="cell-empty" aria-label="Не сдано" />
+                        )}
+                      </td>
+                    )
+                  })}
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -409,10 +397,11 @@ export function JournalTable({
           <GradeBadge grade={87} type="points" variant="cell" /> баллы 0–100
         </span>
         <span className="cell-empty" /> не сдано
-        {mode === 'admin' ? <span className="muted">Клик по ячейке — редактирование</span> : null}
-        {mode === 'student' ? (
-          <span className="muted">Ваш столбец подсвечен · журнал можно прокручивать</span>
-        ) : null}
+        {mode === 'admin' ? (
+          <span className="muted">Клик по ячейке — редактирование</span>
+        ) : (
+          <span className="muted">Ваша строка подсвечена · журнал можно прокручивать</span>
+        )}
       </footer>
     </section>
   )

@@ -183,6 +183,7 @@ export function ReviewDrawer({
   const [draftKey, setDraftKey] = useState(0)
   const [savingAnnotation, setSavingAnnotation] = useState(false)
   const [gradeBusy, setGradeBusy] = useState(false)
+  const [gradeConfirm, setGradeConfirm] = useState<number | null>(null)
   const [pointsDraft, setPointsDraft] = useState('')
   const [removing, setRemoving] = useState(false)
   const [editingText, setEditingText] = useState(false)
@@ -218,6 +219,7 @@ export function ReviewDrawer({
     setError('')
     setMarkerActive(false)
     setDraft(null)
+    setGradeConfirm(null)
     setEditingText(false)
     setTextValue('')
     setBlob(null)
@@ -271,6 +273,9 @@ export function ReviewDrawer({
       (submission.file_deleted_at ||
         (!submission.file_path && Boolean(submission.original_name))),
   )
+  const hasStoredFiles = Boolean(
+    submission && (submission.file_path || versions.some((version) => version.file_path)),
+  )
   const canMark =
     mode === 'admin' && !fileDeleted && kind && ['pdf', 'docx', 'txt'].includes(kind.preview)
 
@@ -322,12 +327,13 @@ export function ReviewDrawer({
       await backend.annotations.remove(annotation.id)
       await loadAnnotations(submission.id)
       toast.success('Замечание удалено')
+      onChanged?.()
     } catch (err) {
       toast.error((err as Error).message)
     }
   }
 
-  const setGrade = async (grade: number | null) => {
+  const commitGrade = async (grade: number | null, deleteFiles: boolean) => {
     if (!submission || gradeBusy) return
     if (gradeLockedByRemarks && grade != null) {
       toast.error('Сначала исправьте замечания: пока они активны, оценку ставить нельзя')
@@ -340,21 +346,45 @@ export function ReviewDrawer({
     }
     setGradeBusy(true)
     try {
-      await backend.submissions.setGrade(submission.id, grade)
-      setSubmission((current) =>
-        current
-          ? { ...current, grade, status: grade != null ? 'reviewed' : 'submitted' }
-          : current,
-      )
+      const updated = await backend.submissions.setGrade(submission.id, grade, {
+        deleteFiles,
+      })
+      setSubmission(updated)
+      if (deleteFiles) {
+        setBlob(null)
+        const nextVersions = await backend.submissions.versions(submission.id)
+        setVersions(nextVersions)
+      }
       toast.success(
         grade != null ? `Оценка: ${gradeLabel(gradeType, grade)}` : 'Оценка снята',
       )
+      if (deleteFiles) {
+        toast.notify('Файл и прошлые версии удалены из хранилища')
+      }
       onChanged?.()
     } catch (err) {
       toast.error((err as Error).message)
     } finally {
       setGradeBusy(false)
     }
+  }
+
+  const requestGrade = (grade: number | null) => {
+    if (!submission || gradeBusy) return
+    if (gradeLockedByRemarks && grade != null) {
+      toast.error('Сначала исправьте замечания: пока они активны, оценку ставить нельзя')
+      return
+    }
+    const message = validateGrade(gradeType, grade)
+    if (message) {
+      toast.error(message)
+      return
+    }
+    if (grade != null && hasStoredFiles) {
+      setGradeConfirm(grade)
+      return
+    }
+    void commitGrade(grade, false)
   }
 
   const savePointsGrade = () => {
@@ -367,7 +397,7 @@ export function ReviewDrawer({
       toast.error('Балл должен быть целым числом от 0 до 100')
       return
     }
-    setGrade(value)
+    requestGrade(value)
   }
 
   const removeSubmission = async () => {
@@ -458,15 +488,16 @@ export function ReviewDrawer({
     .join(' · ')
 
   return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title={title}
-      subtitle={subtitle}
-      size="full"
-      className="review-modal"
-      closeOnBackdrop={false}
-    >
+    <>
+      <Modal
+        open={open}
+        onClose={onClose}
+        title={title}
+        subtitle={subtitle}
+        size="full"
+        className="review-modal"
+        closeOnBackdrop={false}
+      >
       {loading ? (
         <div className="viewer-loading viewer-loading--page">
           <Loader2 className="spin" size={26} /> Загружаем работу…
@@ -542,8 +573,8 @@ export function ReviewDrawer({
                   <FileX size={30} />
                   <h3>Файл удалён после проверки</h3>
                   <p>
-                    Файл и его прошлые версии хранились 7 дней после выставления оценки и были
-                    удалены из хранилища. Оценка, замечания и данные о работе сохранены.
+                    Файл и его прошлые версии удалены из хранилища сразу после подтверждения
+                    проверки. Оценка, замечания и данные о работе сохранены.
                   </p>
                 </div>
               ) : !submission.file_path ? (
@@ -656,7 +687,7 @@ export function ReviewDrawer({
                         className={`grade-choice__btn grade-choice__btn--pass ${
                           submission.grade === 1 ? 'is-active' : ''
                         }`}
-                        onClick={() => setGrade(1)}
+                        onClick={() => requestGrade(1)}
                         disabled={gradeBusy || gradeLockedByRemarks}
                         data-testid="grade-pass"
                       >
@@ -667,7 +698,7 @@ export function ReviewDrawer({
                         className={`grade-choice__btn grade-choice__btn--fail ${
                           submission.grade === 0 ? 'is-active' : ''
                         }`}
-                        onClick={() => setGrade(0)}
+                        onClick={() => requestGrade(0)}
                         disabled={gradeBusy || gradeLockedByRemarks}
                         data-testid="grade-fail"
                       >
@@ -677,7 +708,7 @@ export function ReviewDrawer({
                         <button
                           type="button"
                           className="text-btn"
-                          onClick={() => setGrade(null)}
+                          onClick={() => requestGrade(null)}
                           disabled={gradeBusy}
                         >
                           Снять
@@ -721,7 +752,7 @@ export function ReviewDrawer({
                         <button
                           type="button"
                           className="text-btn"
-                          onClick={() => setGrade(null)}
+                          onClick={() => requestGrade(null)}
                           disabled={gradeBusy}
                         >
                           Снять
@@ -737,7 +768,7 @@ export function ReviewDrawer({
                   <Stars
                     value={submission.grade}
                     onChange={
-                      mode === 'admin' && !gradeLockedByRemarks ? setGrade : undefined
+                      mode === 'admin' && !gradeLockedByRemarks ? requestGrade : undefined
                     }
                     size={24}
                     showEmpty
@@ -758,10 +789,10 @@ export function ReviewDrawer({
                   {gradeLockedByRemarks
                     ? 'Оценка станет доступна после загрузки студентом новой версии или после удаления замечаний.'
                     : gradeType === 'pass_fail'
-                      ? 'Выберите «Зачёт» или «Незачёт». После оценки работа блокируется для студента.'
+                      ? 'Выберите «Зачёт» или «Незачёт». Перед сохранением подтвердите проверку — файл удалится сразу, оценка останется.'
                       : gradeType === 'points'
-                        ? 'Введите целое число от 0 до 100 и нажмите «Сохранить». После оценки работа блокируется для студента.'
-                        : 'Нажмите на звезду, чтобы выставить оценку. Повторное нажатие на выбранную звезду снимает оценку. После оценки работа блокируется.'}
+                        ? 'Введите целое число от 0 до 100 и нажмите «Сохранить». Перед сохранением подтвердите проверку — файл удалится сразу.'
+                        : 'Нажмите на звезду, чтобы выставить оценку. Перед сохранением подтвердите проверку — файл удалится сразу. Повторное нажатие снимает оценку.'}
                 </p>
               ) : (
                 <p className="grade-card__hint">
@@ -770,7 +801,7 @@ export function ReviewDrawer({
                       ? `Ваша оценка: ${gradeLabel(
                           gradeType,
                           submission.grade,
-                        )}. Файл удалён из хранилища через 7 дней после проверки.`
+                        )}. Файл удалён из хранилища после проверки.`
                       : `Ваша оценка: ${gradeLabel(
                           gradeType,
                           submission.grade,
@@ -778,13 +809,6 @@ export function ReviewDrawer({
                     : 'Пока оценки нет — файл можно заменить в разделе «Задания».'}
                 </p>
               )}
-
-              {mode === 'admin' && submission.grade != null && !fileDeleted ? (
-                <p className="grade-card__hint grade-card__hint--retention">
-                  Файл будет удалён из хранилища через 7 дней после проверки. Оценка и данные
-                  работы останутся.
-                </p>
-              ) : null}
 
               {mode === 'admin' ? (
                 <button
@@ -928,7 +952,49 @@ export function ReviewDrawer({
           </aside>
         </div>
       ) : null}
-    </Modal>
+      </Modal>
+
+      <Modal
+        open={gradeConfirm !== null}
+        onClose={() => setGradeConfirm(null)}
+        title="Вы точно проверили задание полностью?"
+        subtitle="Это подтверждение нужно перед выставлением оценки"
+        size="sm"
+        closeOnBackdrop={false}
+      >
+        <div className="grade-confirm">
+          <p>
+            После подтверждения файл работы и все прошлые версии будут <strong>сразу удалены</strong>{' '}
+            из хранилища. Оценка, замечания и данные о сдаче останутся в журнале.
+          </p>
+          <div className="grade-confirm__actions">
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={() => setGradeConfirm(null)}
+              disabled={gradeBusy}
+            >
+              Нет
+            </button>
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={() => {
+                if (gradeConfirm === null) return
+                const value = gradeConfirm
+                setGradeConfirm(null)
+                void commitGrade(value, true)
+              }}
+              disabled={gradeBusy}
+              data-testid="grade-confirm-delete"
+            >
+              {gradeBusy ? <Loader2 className="spin" size={16} /> : <Check size={16} />}
+              Проверено
+            </button>
+          </div>
+        </div>
+      </Modal>
+    </>
   )
 }
 

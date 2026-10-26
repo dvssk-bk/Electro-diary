@@ -13,19 +13,20 @@ import {
 import { AppShell } from '../components/AppShell'
 import { Modal } from '../components/Modal'
 import { EmptyState, ErrorBox, Spinner } from '../components/Feedback'
+import { useDisciplines } from '../context/DisciplineContext'
 import { useToast } from '../context/ToastContext'
 import { backend } from '../lib/api'
 import { formatDate, plural } from '../lib/format'
-import type { Assignment, Group, Profile } from '../lib/types'
+import type { Group, Profile } from '../lib/types'
 
 interface GroupRow {
   group: Group
   students: Profile[]
-  assignments: Assignment[]
 }
 
 export function AdminGroupsPage() {
   const toast = useToast()
+  const { refresh: refreshDisciplines } = useDisciplines()
   const [rows, setRows] = useState<GroupRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -48,7 +49,6 @@ export function AdminGroupsPage() {
         groups.map(async (group) => ({
           group,
           students: await backend.students(group.name),
-          assignments: await backend.assignments.list(group.name),
         })),
       )
       setRows(withDetails)
@@ -93,9 +93,7 @@ export function AdminGroupsPage() {
     try {
       if (renameTarget) {
         await backend.groups.rename(renameTarget.name, value)
-        if (localStorage.getItem('diary_admin_group') === renameTarget.name) {
-          localStorage.setItem('diary_admin_group', value)
-        }
+        void refreshDisciplines()
         toast.success(`Группа ${renameTarget.name} переименована в ${value}`)
       } else {
         await backend.groups.create(value)
@@ -121,12 +119,7 @@ export function AdminGroupsPage() {
     setDeleteError('')
     try {
       await backend.groups.remove(deleteTarget.group.name)
-      if (localStorage.getItem('diary_admin_group') === deleteTarget.group.name) {
-        const remaining = rows.filter((row) => row.group.name !== deleteTarget.group.name)
-        const next = remaining[0]?.group.name
-        if (next) localStorage.setItem('diary_admin_group', next)
-        else localStorage.removeItem('diary_admin_group')
-      }
+      void refreshDisciplines()
       toast.success(`Группа ${deleteTarget.group.name} удалена`)
       setDeleteTarget(null)
       setRefreshKey((key) => key + 1)
@@ -248,10 +241,10 @@ export function AdminGroupsPage() {
 
               <footer className="group-card__foot">
                 <Link to="/admin/journal" className="text-btn">
-                  Открыть журнал <ArrowRight size={14} />
+                  Перейти в журнал <ArrowRight size={14} />
                 </Link>
                 <Link to="/admin/assignments" className="text-btn">
-                  Работы группы <ArrowRight size={14} />
+                  Работы <ArrowRight size={14} />
                 </Link>
               </footer>
             </article>
@@ -339,9 +332,7 @@ export function AdminGroupsPage() {
           <div className="form">
             <p className="form-note">
               Группа <strong>{deleteTarget.group.name}</strong> будет удалена безвозвратно.
-              {deleteTarget.assignments.length
-                ? ` Вместе с ней удалятся задания: ${deleteTarget.assignments.length}.`
-                : ' Заданий в группе нет.'}
+              Все дисциплины и задания этой группы удалятся каскадно.
             </p>
 
             {deleteTarget.students.length ? (

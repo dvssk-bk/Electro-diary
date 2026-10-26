@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import { backend } from '../lib/api'
-import type { Profile, StudentCredentials } from '../lib/types'
+import type { Profile, StudentCredentials, TeacherRegistration } from '../lib/types'
 
 interface AuthContextValue {
   profile: Profile | null
@@ -16,6 +16,7 @@ interface AuthContextValue {
   login: (login: string, password: string) => Promise<Profile>
   logout: () => Promise<void>
   register: (fullName: string, groupName: string) => Promise<StudentCredentials>
+  registerTeacher: (fullName: string, password: string) => Promise<TeacherRegistration>
   refreshProfile: () => Promise<void>
 }
 
@@ -66,14 +67,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return backend.auth.register(fullName, groupName)
   }, [])
 
+  const registerTeacher = useCallback(async (fullName: string, password: string) => {
+    const value = await backend.auth.registerTeacher(fullName, password)
+    setProfile(value.profile)
+    return value
+  }, [])
+
   const refreshProfile = useCallback(async () => {
     const value = await backend.auth.getProfile()
     setProfile(value)
   }, [])
 
   const value = useMemo(
-    () => ({ profile, loading, login, logout, register, refreshProfile }),
-    [profile, loading, login, logout, register, refreshProfile],
+    () => ({ profile, loading, login, logout, register, registerTeacher, refreshProfile }),
+    [profile, loading, login, logout, register, registerTeacher, refreshProfile],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

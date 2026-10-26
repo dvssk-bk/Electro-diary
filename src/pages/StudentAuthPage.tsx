@@ -190,7 +190,7 @@ export function StudentAuthPage() {
         </div>
 
         <footer className="auth-hero__footer">
-          Преподаватель — Ксения Андреевна · {year}
+          Электронный дневник · {year}
         </footer>
       </section>
 

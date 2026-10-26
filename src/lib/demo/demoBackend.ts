@@ -1,13 +1,16 @@
 import type {
   Annotation,
   Assignment,
+  Discipline,
   Group,
   JournalData,
   NewAssignment,
+  NewDiscipline,
   Profile,
   StudentCredentials,
   Submission,
   SubmissionVersion,
+  TeacherRegistration,
   UploadProgress,
   WorkRow,
 } from '../types'
@@ -26,11 +29,15 @@ import {
   saveDb,
 } from './demoDb'
 import { extensionOf, fileKind, safeMime, sanitizeFileName } from '../fileTypes'
-import { defaultSubject } from '../supabase'
 import { validateGrade } from '../grades'
-import { isReviewRetentionExpired } from '../retention'
 
 const listeners = new Set<(profile: Profile | null) => void>()
+
+const TEACHER_ALLOWLIST = [
+  'Потапова Ксения Андреевна',
+  'Пискунов Тимофей Александрович',
+  'Ерошенко Екатерина Александровна',
+]
 
 function emit(): void {
   const profile = getSessionProfile()
@@ -86,14 +93,70 @@ function translit(value: string): string {
     .replace(/[^a-z0-9]/g, '')
 }
 
-function makeLogin(fullName: string, existing: string[]): string {
-  const base = translit(fullName.split(' ')[0]).slice(0, 12) || 'student'
+function makeLogin(fullName: string, existing: string[], fallback = 'student'): string {
+  const base = translit(fullName.split(' ')[0]).slice(0, 12) || fallback
   const used = new Set(existing.map((login) => login.toLowerCase()))
   for (let attempt = 0; attempt < 40; attempt++) {
     const candidate = `${base}${Math.floor(1000 + Math.random() * 9000)}`
     if (!used.has(candidate.toLowerCase())) return candidate
   }
-  return `student${Date.now().toString().slice(-8)}`
+  return `${fallback}${Date.now().toString().slice(-8)}`
+}
+
+function findDiscipline(db: ReturnType<typeof loadDb>, id: string): Discipline | null {
+  return db.disciplines.find((discipline) => discipline.id === id) ?? null
+}
+
+function canOpenDiscipline(profile: Profile, discipline: Discipline): boolean {
+  if (profile.role === 'admin') return discipline.teacher_id === profile.id
+  return discipline.group_name === profile.group_name
+}
+
+function requireVisibleDiscipline(
+  db: ReturnType<typeof loadDb>,
+  profile: Profile,
+  disciplineId: string,
+): Discipline {
+  const discipline = findDiscipline(db, disciplineId)
+  if (!discipline) throw new Error('Дисциплина не найдена')
+  if (!canOpenDiscipline(profile, discipline)) throw new Error('Нет доступа к этой дисциплине')
+  return discipline
+}
+
+function canManageSubmission(
+  db: ReturnType<typeof loadDb>,
+  profile: Profile,
+  submission: Submission,
+): boolean {
+  if (profile.role === 'student') return submission.student_id === profile.id
+  const assignment = db.assignments.find((item) => item.id === submission.assignment_id)
+  if (!assignment?.discipline_id) return false
+  const discipline = findDiscipline(db, assignment.discipline_id)
+  return Boolean(discipline && discipline.teacher_id === profile.id)
+}
+
+async function deleteFilesForSubmission(
+  db: ReturnType<typeof loadDb>,
+  submissionId: string,
+): Promise<boolean> {
+  const submission = db.submissions.find((item) => item.id === submissionId)
+  if (!submission) return false
+  const versions = db.versions.filter((item) => item.submission_id === submissionId)
+  const paths = new Set<string>()
+  if (submission.file_path) paths.add(submission.file_path)
+  for (const version of versions) {
+    if (version.file_path) paths.add(version.file_path)
+  }
+  if (!paths.size) return false
+  for (const path of paths) await deleteDemoFile(path)
+  const deletedAt = new Date().toISOString()
+  submission.file_path = null
+  submission.file_deleted_at = deletedAt
+  for (const version of versions) {
+    version.file_path = null
+    version.file_deleted_at = deletedAt
+  }
+  return true
 }
 
 async function simulateProgress(onProgress?: UploadProgress): Promise<void> {
@@ -168,7 +231,8 @@ function activeAnnotationCount(db: ReturnType<typeof loadDb>, submissionId: stri
   return count
 }
 
-function rowFor(submission: Submission, db: ReturnType<typeof loadDb>): WorkRow | null {  const assignment = db.assignments.find((a) => a.id === submission.assignment_id)
+function rowFor(submission: Submission, db: ReturnType<typeof loadDb>): WorkRow | null {
+  const assignment = db.assignments.find((a) => a.id === submission.assignment_id)
   const student = db.users.find((u) => u.profile.id === submission.student_id)?.profile
   if (!assignment || !student) return null
   return {
@@ -241,6 +305,93 @@ export const demoBackend: Backend = {
       saveDb()
       return { login, password, fullName: name, groupName: group }
     },
+    async registerTeacher(fullName, password): Promise<TeacherRegistration> {
+      const db = loadDb()
+      const enteredName = normalizeName(fullName)
+      const name = TEACHER_ALLOWLIST.find((allowed) => sameName(allowed, enteredName))
+      if (!name) {
+        throw new Error(
+          'Этого преподавателя нет в списке. Обратитесь к администратору дневника.',
+        )
+      }
+      if (password.length < 8) {
+        throw new Error('Пароль должен содержать минимум 8 символов')
+      }
+      if (password.length > 72) {
+        throw new Error('Пароль должен быть не длиннее 72 символов')
+      }
+      if (
+        db.users.some(
+          (user) =>
+            user.profile.role === 'admin' && sameName(user.profile.full_name, name),
+        )
+      ) {
+        throw new Error('Преподаватель с таким ФИО уже зарегистрирован. Войдите в кабинет.')
+      }
+      const login = makeLogin(
+        name,
+        db.users.map((user) => user.login),
+        'teacher',
+      )
+      const profile: Profile = {
+        id: demoId(),
+        role: 'admin',
+        full_name: name,
+        group_name: null,
+        created_at: new Date().toISOString(),
+      }
+      db.users.push({ login, password, profile })
+      db.sessionLogin = login
+      saveDb()
+      return { profile: coerceProfile(profile), login }
+    },
+  },
+
+  disciplines: {
+    async list() {
+      const profile = requireSession()
+      const db = loadDb()
+      return db.disciplines
+        .filter((discipline) => canOpenDiscipline(profile, discipline))
+        .map((discipline) => ({ ...discipline }))
+        .sort((a, b) => {
+          if (a.group_name !== b.group_name) {
+            return a.group_name.localeCompare(b.group_name, 'ru')
+          }
+          return a.name.localeCompare(b.name, 'ru')
+        })
+    },
+    async create(input: NewDiscipline) {
+      const admin = requireAdmin()
+      const db = loadDb()
+      const name = normalizeName(input.name)
+      const groupName = input.groupName.trim()
+      if (!name || name.length > 150) {
+        throw new Error('Название дисциплины должно быть длиной от 1 до 150 символов')
+      }
+      if (!db.groups.some((group) => group.name === groupName)) {
+        throw new Error('Группа не найдена')
+      }
+      if (
+        db.disciplines.some(
+          (discipline) =>
+            discipline.group_name === groupName && sameName(discipline.name, name),
+        )
+      ) {
+        throw new Error('Такая дисциплина уже есть у этой группы')
+      }
+      const discipline: Discipline = {
+        id: demoId(),
+        name,
+        group_name: groupName,
+        teacher_id: admin.id,
+        teacher_name: admin.full_name,
+        created_at: new Date().toISOString(),
+      }
+      db.disciplines.push(discipline)
+      saveDb()
+      return { ...discipline }
+    },
   },
 
   groups: {
@@ -277,6 +428,9 @@ export const demoBackend: Backend = {
       for (const user of db.users) {
         if (user.profile.group_name === oldName) user.profile.group_name = trimmed
       }
+      for (const discipline of db.disciplines) {
+        if (discipline.group_name === oldName) discipline.group_name = trimmed
+      }
       for (const assignment of db.assignments) {
         if (assignment.group_name === oldName) assignment.group_name = trimmed
       }
@@ -309,6 +463,7 @@ export const demoBackend: Backend = {
       }
 
       db.groups = db.groups.filter((g) => g.name !== name)
+      db.disciplines = db.disciplines.filter((d) => d.group_name !== name)
       db.assignments = db.assignments.filter((a) => a.group_name !== name)
       db.submissions = db.submissions.filter((s) => !submissionIds.has(s.id))
       db.versions = db.versions.filter((v) => !submissionIds.has(v.submission_id))
@@ -329,25 +484,32 @@ export const demoBackend: Backend = {
   },
 
   assignments: {
-    async list(groupName: string) {
-      requireSession()
-      return loadDb()
-        .assignments.filter((a) => a.group_name === groupName)
+    async list(disciplineId: string) {
+      const profile = requireSession()
+      const db = loadDb()
+      requireVisibleDiscipline(db, profile, disciplineId)
+      return db.assignments
+        .filter((assignment) => assignment.discipline_id === disciplineId)
         .sort((a, b) => {
           if (a.assigned_date !== b.assigned_date) return a.assigned_date.localeCompare(b.assigned_date)
           return a.lesson_number - b.lesson_number
         })
     },
     async create(input: NewAssignment) {
-      requireAdmin()
+      const admin = requireAdmin()
       const db = loadDb()
-      if (!db.groups.some((g) => g.name === input.group_name)) throw new Error('Группа не найдена')
+      const discipline = findDiscipline(db, input.discipline_id)
+      if (!discipline) throw new Error('Дисциплина не найдена')
+      if (discipline.teacher_id !== admin.id) {
+        throw new Error('Можно добавлять задания только в свою дисциплину')
+      }
       const assignment: Assignment = {
         id: demoId(),
+        discipline_id: discipline.id,
         title: input.title.trim(),
         description: input.description.trim(),
-        group_name: input.group_name,
-        subject: input.subject?.trim() || defaultSubject,
+        group_name: discipline.group_name,
+        subject: discipline.name,
         grade_type: input.grade_type || 'stars',
         assigned_date: input.assigned_date,
         lesson_number: input.lesson_number,
@@ -360,10 +522,20 @@ export const demoBackend: Backend = {
       return assignment
     },
     async update(id: string, input: NewAssignment) {
-      requireAdmin()
+      const admin = requireAdmin()
       const db = loadDb()
       const assignment = db.assignments.find((a) => a.id === id)
       if (!assignment) throw new Error('Задание не найдено')
+      const currentDiscipline = assignment.discipline_id
+        ? findDiscipline(db, assignment.discipline_id)
+        : null
+      if (!currentDiscipline || currentDiscipline.teacher_id !== admin.id) {
+        throw new Error('Можно изменять задания только в своей дисциплине')
+      }
+      const discipline = findDiscipline(db, input.discipline_id)
+      if (!discipline || discipline.teacher_id !== admin.id) {
+        throw new Error('Дисциплина не найдена')
+      }
       if (!input.title.trim()) throw new Error('Введите название задания')
       const nextGradeType = input.grade_type || 'stars'
       const currentGradeType = assignment.grade_type || 'stars'
@@ -373,10 +545,11 @@ export const demoBackend: Backend = {
       ) {
         throw new Error('Нельзя менять систему оценивания после выставления оценок')
       }
+      assignment.discipline_id = discipline.id
       assignment.title = input.title.trim()
       assignment.description = input.description.trim()
-      assignment.group_name = input.group_name
-      if (input.subject) assignment.subject = input.subject
+      assignment.group_name = discipline.group_name
+      assignment.subject = discipline.name
       assignment.grade_type = nextGradeType
       assignment.assigned_date = input.assigned_date
       assignment.lesson_number = input.lesson_number
@@ -385,8 +558,16 @@ export const demoBackend: Backend = {
       return { ...assignment }
     },
     async remove(id: string) {
-      requireAdmin()
+      const admin = requireAdmin()
       const db = loadDb()
+      const assignment = db.assignments.find((a) => a.id === id)
+      if (!assignment) return
+      const discipline = assignment.discipline_id
+        ? findDiscipline(db, assignment.discipline_id)
+        : null
+      if (!discipline || discipline.teacher_id !== admin.id) {
+        throw new Error('Можно удалять задания только в своей дисциплине')
+      }
       const submissions = db.submissions.filter((s) => s.assignment_id === id)
       for (const submission of submissions) {
         if (submission.file_path) await deleteDemoFile(submission.file_path)
@@ -403,24 +584,25 @@ export const demoBackend: Backend = {
     },
   },
 
-  async journal(groupName?: string): Promise<JournalData> {
+  async journal(disciplineId: string): Promise<JournalData> {
     const profile = requireSession()
     const db = loadDb()
-    const group =
-      profile.role === 'admin' ? groupName ?? db.groups[0]?.name ?? '' : profile.group_name ?? ''
+    const discipline = requireVisibleDiscipline(db, profile, disciplineId)
+    const group = discipline.group_name
     const students = db.users
       .filter((u) => u.profile.role === 'student' && u.profile.group_name === group)
       .map((u) => coerceProfile(u.profile))
       .sort((a, b) => a.full_name.localeCompare(b.full_name, 'ru'))
     const assignments = db.assignments
-      .filter((a) => a.group_name === group)
+      .filter((a) => a.discipline_id === disciplineId)
       .sort((a, b) => {
         if (a.assigned_date !== b.assigned_date) return a.assigned_date.localeCompare(b.assigned_date)
         return a.lesson_number - b.lesson_number
       })
     const studentIds = new Set(students.map((s) => s.id))
+    const assignmentIds = new Set(assignments.map((a) => a.id))
     const entries = db.submissions
-      .filter((s) => studentIds.has(s.student_id))
+      .filter((s) => studentIds.has(s.student_id) && assignmentIds.has(s.assignment_id))
       .map((s) => ({
         submission_id: s.id,
         assignment_id: s.assignment_id,
@@ -438,14 +620,20 @@ export const demoBackend: Backend = {
       const profile = requireStudent()
       return loadDb().submissions.filter((s) => s.student_id === profile.id)
     },
-    async list(groupName: string, filters: SubmissionFilters = {}): Promise<WorkRow[]> {
-      requireAdmin()
+    async list(disciplineId: string, filters: SubmissionFilters = {}): Promise<WorkRow[]> {
+      const admin = requireAdmin()
       const db = loadDb()
-      const groupAssignments = new Set(
-        db.assignments.filter((a) => a.group_name === groupName).map((a) => a.id),
+      const discipline = findDiscipline(db, disciplineId)
+      if (!discipline || discipline.teacher_id !== admin.id) {
+        throw new Error('Нет доступа к этой дисциплине')
+      }
+      const disciplineAssignments = new Set(
+        db.assignments
+          .filter((assignment) => assignment.discipline_id === disciplineId)
+          .map((assignment) => assignment.id),
       )
       return db.submissions
-        .filter((s) => groupAssignments.has(s.assignment_id))
+        .filter((s) => disciplineAssignments.has(s.assignment_id))
         .filter((s) => !filters.assignmentId || s.assignment_id === filters.assignmentId)
         .filter((s) => !filters.studentId || s.student_id === filters.studentId)
         .sort((a, b) => b.submitted_at.localeCompare(a.submitted_at))
@@ -454,9 +642,10 @@ export const demoBackend: Backend = {
     },
     async get(id: string) {
       const profile = requireSession()
-      const submission = loadDb().submissions.find((s) => s.id === id)
+      const db = loadDb()
+      const submission = db.submissions.find((s) => s.id === id)
       if (!submission) throw new Error('Работа не найдена')
-      if (profile.role !== 'admin' && submission.student_id !== profile.id) {
+      if (!canManageSubmission(db, profile, submission)) {
         throw new Error('Нет доступа к этой работе')
       }
       return { ...submission }
@@ -520,11 +709,18 @@ export const demoBackend: Backend = {
       if (submission.student_id !== profile.id) throw new Error('Это чужая работа')
       return demoBackend.submissions.upload(submission.assignment_id, file)
     },
-    async setGrade(submissionId: string, grade: number | null) {
-      requireAdmin()
+    async setGrade(
+      submissionId: string,
+      grade: number | null,
+      options: { deleteFiles?: boolean } = {},
+    ) {
+      const admin = requireAdmin()
       const db = loadDb()
       const submission = db.submissions.find((s) => s.id === submissionId)
       if (!submission) throw new Error('Работа не найдена')
+      if (!canManageSubmission(db, admin, submission)) {
+        throw new Error('Нет доступа к этой работе')
+      }
       const assignment = db.assignments.find((a) => a.id === submission.assignment_id)
       const message = validateGrade(assignment?.grade_type, grade)
       if (message) throw new Error(message)
@@ -541,10 +737,22 @@ export const demoBackend: Backend = {
       submission.status = grade != null ? 'reviewed' : 'submitted'
       submission.reviewed_at = grade != null ? new Date().toISOString() : null
       submission.updated_at = new Date().toISOString()
-      saveDb()
+      if (grade != null && options.deleteFiles) {
+        // Оценку сохраняем до удаления файлов: если удаление сорвётся,
+        // работа останется оценённой, а резервная очистка повторит попытку.
+        saveDb()
+        try {
+          await deleteFilesForSubmission(db, submissionId)
+        } finally {
+          saveDb()
+        }
+      } else {
+        saveDb()
+      }
+      return { ...submission }
     },
     async markSubmitted(assignmentId: string, studentId: string) {
-      requireAdmin()
+      const admin = requireAdmin()
       const db = loadDb()
       const existing = db.submissions.find(
         (s) => s.assignment_id === assignmentId && s.student_id === studentId,
@@ -552,6 +760,12 @@ export const demoBackend: Backend = {
       if (existing) return { ...existing }
       const assignment = db.assignments.find((a) => a.id === assignmentId)
       if (!assignment) throw new Error('Задание не найдено')
+      const discipline = assignment.discipline_id
+        ? findDiscipline(db, assignment.discipline_id)
+        : null
+      if (!discipline || discipline.teacher_id !== admin.id) {
+        throw new Error('Нет доступа к этой дисциплине')
+      }
       const timestamp = new Date().toISOString()
       const submission: Submission = {
         id: demoId(),
@@ -574,10 +788,13 @@ export const demoBackend: Backend = {
       return { ...submission }
     },
     async remove(submissionId: string) {
-      requireAdmin()
+      const admin = requireAdmin()
       const db = loadDb()
       const submission = db.submissions.find((s) => s.id === submissionId)
       if (!submission) return
+      if (!canManageSubmission(db, admin, submission)) {
+        throw new Error('Нет доступа к этой работе')
+      }
       if (submission.file_path) await deleteDemoFile(submission.file_path)
       const versions = db.versions.filter((v) => v.submission_id === submissionId)
       for (const version of versions) {
@@ -593,7 +810,7 @@ export const demoBackend: Backend = {
       const db = loadDb()
       const submission = db.submissions.find((s) => s.id === submissionId)
       if (!submission) throw new Error('Работа не найдена')
-      if (profile.role !== 'admin' && submission.student_id !== profile.id) {
+      if (!canManageSubmission(db, profile, submission)) {
         throw new Error('Нет доступа')
       }
       return db.versions
@@ -615,41 +832,58 @@ export const demoBackend: Backend = {
       return demoBackend.submissions.replace(submission.id, file)
     },
     async cleanupReviewedFiles() {
-      requireAdmin()
+      const admin = requireAdmin()
       const db = loadDb()
-      const expired = db.submissions.filter(
+      const ownAssignmentIds = new Set(
+        db.assignments
+          .filter((assignment) => {
+            const discipline = assignment.discipline_id
+              ? findDiscipline(db, assignment.discipline_id)
+              : null
+            return discipline?.teacher_id === admin.id
+          })
+          .map((assignment) => assignment.id),
+      )
+      const reviewed = db.submissions.filter(
         (submission) =>
           submission.grade != null &&
           !submission.file_deleted_at &&
-          isReviewRetentionExpired(submission.reviewed_at ?? submission.updated_at),
+          ownAssignmentIds.has(submission.assignment_id),
       )
-      if (!expired.length) return 0
+      if (!reviewed.length) return 0
 
-      const submissionIds = new Set(expired.map((submission) => submission.id))
+      const reviewedIds = new Set(reviewed.map((submission) => submission.id))
       const paths = new Set<string>()
-      for (const submission of expired) {
-        if (submission.file_path) paths.add(submission.file_path)
-      }
-      for (const version of db.versions) {
-        if (submissionIds.has(version.submission_id) && version.file_path) {
-          paths.add(version.file_path)
+      const withFiles = new Set<string>()
+      for (const submission of reviewed) {
+        if (submission.file_path) {
+          paths.add(submission.file_path)
+          withFiles.add(submission.id)
         }
       }
+      for (const version of db.versions) {
+        if (reviewedIds.has(version.submission_id) && version.file_path) {
+          paths.add(version.file_path)
+          withFiles.add(version.submission_id)
+        }
+      }
+      if (!paths.size) return 0
       for (const path of paths) await deleteDemoFile(path)
 
       const deletedAt = new Date().toISOString()
-      for (const submission of expired) {
+      for (const submission of reviewed) {
+        if (!withFiles.has(submission.id)) continue
         submission.file_path = null
         submission.file_deleted_at = deletedAt
       }
       for (const version of db.versions) {
-        if (submissionIds.has(version.submission_id)) {
+        if (withFiles.has(version.submission_id) && version.file_path) {
           version.file_path = null
           version.file_deleted_at = deletedAt
         }
       }
       saveDb()
-      return expired.length
+      return withFiles.size
     },
   },
 
@@ -659,7 +893,7 @@ export const demoBackend: Backend = {
       const db = loadDb()
       const submission = db.submissions.find((s) => s.id === submissionId)
       if (!submission) return []
-      if (profile.role !== 'admin' && submission.student_id !== profile.id) {
+      if (!canManageSubmission(db, profile, submission)) {
         throw new Error('Нет доступа к отметкам')
       }
       return db.annotations
@@ -668,6 +902,11 @@ export const demoBackend: Backend = {
     },
     async create(input: AnnotationInput) {
       const admin = requireAdmin()
+      const db = loadDb()
+      const submission = db.submissions.find((item) => item.id === input.submission_id)
+      if (!submission || !canManageSubmission(db, admin, submission)) {
+        throw new Error('Нет доступа к этой работе')
+      }
       if (!input.comment.trim()) throw new Error('Добавьте комментарий к замечанию')
       const annotation: Annotation = {
         id: demoId(),
@@ -681,15 +920,20 @@ export const demoBackend: Backend = {
         created_by: admin.id,
         created_at: new Date().toISOString(),
       }
-      const db = loadDb()
       db.annotations.push(annotation)
       saveDb()
       return annotation
     },
     async remove(id: string) {
-      requireAdmin()
+      const admin = requireAdmin()
       const db = loadDb()
-      db.annotations = db.annotations.filter((a) => a.id !== id)
+      const annotation = db.annotations.find((item) => item.id === id)
+      if (!annotation) return
+      const submission = db.submissions.find((item) => item.id === annotation.submission_id)
+      if (!submission || !canManageSubmission(db, admin, submission)) {
+        throw new Error('Нет доступа к этой работе')
+      }
+      db.annotations = db.annotations.filter((item) => item.id !== id)
       saveDb()
     },
   },
@@ -697,19 +941,15 @@ export const demoBackend: Backend = {
   files: {
     async blob(path: string) {
       const profile = requireSession()
-      if (profile.role !== 'admin') {
-        const db = loadDb()
-        const ownsCurrent = db.submissions.some(
-          (s) => s.student_id === profile.id && s.file_path === path,
-        )
-        // Студент также может скачать файл из истории своих версий.
-        const ownsVersion = db.versions.some((version) => {
-          if (version.file_path !== path) return false
-          return db.submissions.some(
-            (s) => s.id === version.submission_id && s.student_id === profile.id,
-          )
-        })
-        if (!ownsCurrent && !ownsVersion) throw new Error('Нет доступа к файлу')
+      const db = loadDb()
+      const current = db.submissions.find((submission) => submission.file_path === path)
+      const versionOwner = db.versions.find((version) => version.file_path === path)
+      const versionSubmission = versionOwner
+        ? db.submissions.find((submission) => submission.id === versionOwner.submission_id)
+        : null
+      const owner = current ?? versionSubmission
+      if (!owner || !canManageSubmission(db, profile, owner)) {
+        throw new Error('Нет доступа к файлу')
       }
       const blob = await getDemoFile(path)
       if (!blob) throw new Error('Файл не найден в демо-хранилище')

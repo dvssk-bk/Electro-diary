@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { CalendarDays, Clock3, Loader2, Save } from 'lucide-react'
+import { CalendarDays, Clock3, Layers3, Loader2, Save } from 'lucide-react'
 import { Modal } from './Modal'
-import type { Assignment, GradeType, Group, NewAssignment } from '../lib/types'
+import type { Assignment, Discipline, GradeType, NewAssignment } from '../lib/types'
 import { backend } from '../lib/api'
 import { todayISO } from '../lib/format'
 import { GRADE_TYPES, toDateTimeLocal } from '../lib/grades'
@@ -9,8 +9,7 @@ import { useToast } from '../context/ToastContext'
 
 interface AssignmentDialogProps {
   open: boolean
-  groups: Group[]
-  defaultGroup: string
+  discipline: Discipline
   assignment: Assignment | null
   onClose: () => void
   onSaved: (assignment: Assignment) => void
@@ -18,8 +17,7 @@ interface AssignmentDialogProps {
 
 export function AssignmentDialog({
   open,
-  groups,
-  defaultGroup,
+  discipline,
   assignment,
   onClose,
   onSaved,
@@ -27,7 +25,6 @@ export function AssignmentDialog({
   const toast = useToast()
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [groupName, setGroupName] = useState(defaultGroup)
   const [date, setDate] = useState(todayISO())
   const [lesson, setLesson] = useState(1)
   const [gradeType, setGradeType] = useState<GradeType>('stars')
@@ -42,7 +39,6 @@ export function AssignmentDialog({
     if (assignment) {
       setTitle(assignment.title)
       setDescription(assignment.description)
-      setGroupName(assignment.group_name)
       setDate(assignment.assigned_date)
       setLesson(assignment.lesson_number)
       setGradeType(assignment.grade_type || 'stars')
@@ -50,23 +46,18 @@ export function AssignmentDialog({
     } else {
       setTitle('')
       setDescription('')
-      setGroupName(defaultGroup || groups[0]?.name || '')
       setDate(todayISO())
       setLesson(1)
       setGradeType('stars')
       setDueAt('')
     }
-  }, [open, assignment, defaultGroup, groups])
+  }, [open, assignment])
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     setError('')
     if (!title.trim()) {
       setError('Введите название задания')
-      return
-    }
-    if (!groupName) {
-      setError('Выберите группу')
       return
     }
     let dueIso: string | null = null
@@ -82,7 +73,7 @@ export function AssignmentDialog({
     const payload: NewAssignment = {
       title: title.trim(),
       description: description.trim(),
-      group_name: groupName,
+      discipline_id: discipline.id,
       grade_type: gradeType,
       assigned_date: date || todayISO(),
       lesson_number: lesson,
@@ -109,13 +100,24 @@ export function AssignmentDialog({
       title={assignment ? 'Редактировать задание' : 'Новое задание'}
       subtitle={
         assignment
-          ? 'Изменения появятся в журнале группы и у студентов'
-          : 'Задание появится в журнале выбранной группы'
+          ? 'Изменения появятся в журнале дисциплины и у студентов'
+          : 'Задание появится в журнале выбранной дисциплины'
       }
       size="md"
     >
       <form className="form" onSubmit={submit}>
         {error ? <div className="error-box">{error}</div> : null}
+        <div className="assignment-discipline">
+          <span className="assignment-discipline__icon">
+            <Layers3 size={17} />
+          </span>
+          <span>
+            <strong>{discipline.name}</strong>
+            <small>
+              группа {discipline.group_name} · {discipline.teacher_name}
+            </small>
+          </span>
+        </div>
         <label className="field">
           <span>Название задания</span>
           <input
@@ -136,21 +138,7 @@ export function AssignmentDialog({
             data-testid="assignment-description"
           />
         </label>
-        <div className="form-row">
-          <label className="field">
-            <span>Группа</span>
-            <select
-              value={groupName}
-              onChange={(event) => setGroupName(event.target.value)}
-              data-testid="assignment-group"
-            >
-              {groups.map((group) => (
-                <option key={group.name} value={group.name}>
-                  Группа {group.name}
-                </option>
-              ))}
-            </select>
-          </label>
+        <div className="form-row form-row--two">
           <label className="field">
             <span>Дата выдачи</span>
             <div className="input-with-icon">

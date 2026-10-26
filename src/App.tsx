@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { DisciplineProvider } from './context/DisciplineContext'
 import { ToastProvider } from './context/ToastContext'
 import { StudentAuthPage } from './pages/StudentAuthPage'
 import { AdminLoginPage } from './pages/AdminLoginPage'
@@ -36,7 +37,8 @@ export default function App() {
   return (
     <AuthProvider>
       <ToastProvider>
-        <Routes>
+        <DisciplineProvider>
+          <Routes>
           <Route path="/" element={<StudentAuthPage />} />
           <Route
             path="/journal"
@@ -80,7 +82,8 @@ export default function App() {
             }
           />
           <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+          </Routes>
+        </DisciplineProvider>
       </ToastProvider>
     </AuthProvider>
   )

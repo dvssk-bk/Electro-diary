@@ -1,12 +1,14 @@
 import type {
   Annotation,
   Assignment,
+  Discipline,
   Group,
   Profile,
   Submission,
   SubmissionVersion,
 } from '../types'
-const DB_KEY = 'diary_demo_v3'
+const DB_KEY = 'diary_demo_v5'
+const DB_VERSION = 5 as const
 
 export interface DemoUser {
   login: string
@@ -15,9 +17,10 @@ export interface DemoUser {
 }
 
 export interface DemoDb {
-  version: 3
+  version: typeof DB_VERSION
   groups: Group[]
   users: DemoUser[]
+  disciplines: Discipline[]
   assignments: Assignment[]
   submissions: Submission[]
   versions: SubmissionVersion[]
@@ -41,21 +44,10 @@ export function createSeedDb(): DemoDb {
   const groups: Group[] = ['211', '311'].map((name) => ({ name, created_at: created }))
 
   return {
-    version: 3,
+    version: DB_VERSION,
     groups,
-    users: [
-      {
-        login: 'ksenia',
-        password: 'Ksenia2026!',
-        profile: {
-          id: 'admin-ksenia',
-          role: 'admin',
-          full_name: 'Ксения Андреевна',
-          group_name: null,
-          created_at: created,
-        },
-      },
-    ],
+    users: [],
+    disciplines: [],
     assignments: [],
     submissions: [],
     versions: [],
@@ -67,12 +59,14 @@ export function createSeedDb(): DemoDb {
 let cache: DemoDb | null = null
 
 export function loadDb(): DemoDb {
-  if (cache) return cache
+  // В демо-режиме один и тот же браузер могут открывать в нескольких вкладках
+  // (например, студент и преподаватель). Всегда читаем актуальную копию из
+  // localStorage, иначе вкладка с устаревшим кэшем затрёт чужие данные.
   try {
     const raw = localStorage.getItem(DB_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as DemoDb
-      if (parsed && parsed.version === 3) {
+      if (parsed && parsed.version === DB_VERSION) {
         cache = parsed
         return cache
       }
@@ -80,6 +74,7 @@ export function loadDb(): DemoDb {
   } catch (error) {
     console.warn('Не удалось прочитать демо-базу', error)
   }
+  if (cache) return cache
   cache = createSeedDb()
   saveDb()
   return cache

@@ -1,13 +1,16 @@
 import type {
   Annotation,
   Assignment,
+  Discipline,
   Group,
   JournalData,
   NewAssignment,
+  NewDiscipline,
   Profile,
   StudentCredentials,
   Submission,
   SubmissionVersion,
+  TeacherRegistration,
   UploadProgress,
   WorkRow,
 } from './types'
@@ -35,6 +38,11 @@ export interface Backend {
     signIn: (login: string, password: string) => Promise<Profile>
     signOut: () => Promise<void>
     register: (fullName: string, groupName: string) => Promise<StudentCredentials>
+    registerTeacher: (fullName: string, password: string) => Promise<TeacherRegistration>
+  }
+  disciplines: {
+    list: () => Promise<Discipline[]>
+    create: (input: NewDiscipline) => Promise<Discipline>
   }
   groups: {
     list: () => Promise<Group[]>
@@ -44,24 +52,28 @@ export interface Backend {
   }
   students: (groupName: string) => Promise<Profile[]>
   assignments: {
-    list: (groupName: string) => Promise<Assignment[]>
+    list: (disciplineId: string) => Promise<Assignment[]>
     create: (input: NewAssignment) => Promise<Assignment>
     update: (id: string, input: NewAssignment) => Promise<Assignment>
     remove: (id: string) => Promise<void>
   }
-  journal: (groupName?: string) => Promise<JournalData>
+  journal: (disciplineId: string) => Promise<JournalData>
   submissions: {
     mine: () => Promise<Submission[]>
-    list: (groupName: string, filters?: SubmissionFilters) => Promise<WorkRow[]>
+    list: (disciplineId: string, filters?: SubmissionFilters) => Promise<WorkRow[]>
     get: (id: string) => Promise<Submission>
     upload: (assignmentId: string, file: File, onProgress?: UploadProgress) => Promise<Submission>
     replace: (submissionId: string, file: File, onProgress?: UploadProgress) => Promise<Submission>
-    setGrade: (submissionId: string, grade: number | null) => Promise<void>
+    setGrade: (
+      submissionId: string,
+      grade: number | null,
+      options?: { deleteFiles?: boolean },
+    ) => Promise<Submission>
     markSubmitted: (assignmentId: string, studentId: string) => Promise<Submission>
     remove: (submissionId: string) => Promise<void>
     versions: (submissionId: string) => Promise<SubmissionVersion[]>
     saveText: (submissionId: string, text: string) => Promise<Submission>
-    /** Удаляет файлы проверенных работ, у которых истёк срок хранения. */
+    /** Удаляет файлы проверенных работ, оставшиеся в хранилище. */
     cleanupReviewedFiles: () => Promise<number>
   }
   annotations: {

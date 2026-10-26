@@ -2310,10 +2310,6 @@ svg {
   background: var(--bg-soft);
 }
 
-.grade-card__hint--retention {
-  color: var(--amber);
-}
-
 .inline-grade {
   display: inline-flex;
   align-items: center;
@@ -4342,7 +4338,7 @@ svg {
   line-height: 1.12;
   letter-spacing: 0.01em;
   text-align: center;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .journal-cell__status {
@@ -4556,4 +4552,577 @@ svg {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ============ Disciplines, teacher registration & transposed journal ============ */
+
+.discipline-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1040px;
+  margin: 0 auto;
+}
+
+.discipline-picker__head {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.discipline-picker__icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--navy-800);
+  background: linear-gradient(145deg, #f7e7bc, #ead28f);
+  border: 1px solid #ddc27a;
+  box-shadow: 0 8px 20px rgba(119, 91, 27, 0.14);
+}
+
+.discipline-picker__head h1 {
+  margin: 2px 0 5px;
+  font-size: clamp(21px, 3vw, 30px);
+  color: var(--navy-950);
+  letter-spacing: -0.025em;
+}
+
+.discipline-picker__head p {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.discipline-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.discipline-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 16px;
+  text-align: left;
+  border-radius: 15px;
+  border: 1px solid #ddd5c5;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(231, 204, 137, 0.25), transparent 45%),
+    #fffdf8;
+  box-shadow: 0 6px 18px rgba(30, 45, 64, 0.06);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.discipline-card:hover {
+  transform: translateY(-2px);
+  border-color: #cdbb8d;
+  box-shadow: 0 12px 28px rgba(30, 45, 64, 0.12);
+}
+
+.discipline-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.discipline-card__icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: #675019;
+  background: #f7e8bd;
+  border: 1px solid #e8d39b;
+}
+
+.discipline-card__group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #697682;
+  background: #f2f5f8;
+  border: 1px solid #e2e8ee;
+  border-radius: 999px;
+  padding: 3px 7px;
+}
+
+.discipline-card strong {
+  font-size: 16px;
+  color: var(--navy-950);
+  line-height: 1.25;
+}
+
+.discipline-card__teacher {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.discipline-card__open {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 5px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--blue-700);
+}
+
+.discipline-form {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  padding: 18px;
+  border-radius: 15px;
+  border: 1px solid #ddd5c5;
+  background: #fffdf8;
+  box-shadow: 0 8px 22px rgba(30, 45, 64, 0.06);
+}
+
+.discipline-form__head h2 {
+  font-size: 17px;
+  color: var(--navy-950);
+  margin-bottom: 3px;
+}
+
+.discipline-form__head p {
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.discipline-form__actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.discipline-add {
+  align-self: flex-start;
+}
+
+.discipline-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 260px;
+  padding: 6px 9px;
+  border-radius: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.07);
+  color: inherit;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.discipline-chip:hover {
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.discipline-chip__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.18;
+}
+
+.discipline-chip__text strong {
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.discipline-chip__text span {
+  font-size: 9.5px;
+  color: rgba(247, 242, 230, 0.62);
+}
+
+.assignment-discipline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 11px;
+  border: 1px solid #e1d8c6;
+  background: #fffaf0;
+}
+
+.assignment-discipline__icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: #725a1b;
+  background: #f4e4b8;
+}
+
+.assignment-discipline span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.assignment-discipline strong {
+  font-size: 13px;
+  color: var(--navy-950);
+}
+
+.assignment-discipline small {
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+.checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.checkbox-row input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--blue-600);
+}
+
+.admin-login__hint {
+  font-size: 10.5px;
+  line-height: 1.5;
+  padding: 9px 10px;
+  border-radius: 9px;
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+}
+
+/* Transposed journal: students are rows, assignments are columns. */
+.journal-table--students {
+  width: max-content;
+  min-width: 100%;
+  table-layout: fixed;
+}
+
+.journal-table--students thead th.assignment-col {
+  min-width: 216px;
+  width: 216px;
+  max-width: 216px;
+  padding: 10px;
+  text-align: left;
+  vertical-align: top;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink);
+  background: #f4f7fa;
+}
+
+.journal-table--students thead th.student-col {
+  position: sticky;
+  left: 0;
+  z-index: 9;
+  min-width: 238px;
+  width: 238px;
+  max-width: 238px;
+  padding: 11px 14px;
+  text-align: left;
+  vertical-align: middle;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  background: #eef2f6;
+  border-right: 1px solid var(--line-strong);
+}
+
+.journal-table--students tbody th.student-col {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  min-width: 238px;
+  width: 238px;
+  max-width: 238px;
+  padding: 10px 13px;
+  text-align: left;
+  vertical-align: middle;
+  background: #fdfcf9;
+  border-right: 1px solid var(--line-strong);
+  border-bottom: 1px solid #e8ecf1;
+}
+
+.journal-table--students tbody tr:nth-child(even) th.student-col {
+  background: #fbfaf6;
+}
+
+.journal-table--students tbody tr:hover th.student-col {
+  background: #f7f4eb;
+}
+
+.journal-table--students tbody td {
+  height: 64px;
+  padding: 7px 6px;
+  vertical-align: middle;
+}
+
+.journal-table--students .student-col__name {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #72808d;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.journal-table--students .student-col__rest {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--navy-950);
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  margin-top: 0;
+}
+
+.journal-table--students .student-col__count {
+  margin-top: 3px;
+}
+
+.journal-table--students tr.is-own > th.student-col {
+  background: #fdf5dd;
+  box-shadow: inset 3px 0 0 #d5b45b;
+}
+
+.journal-table--students tr.is-own > td {
+  background: #fffaf0;
+}
+
+.journal-table--students tbody tr.is-own:nth-child(even) > td {
+  background: #fdf6e6;
+}
+
+.journal-table--students tbody tr.is-own:hover > td {
+  background: #fbf1d5;
+}
+
+.journal-table--students tbody tr.is-own:hover > th.student-col {
+  background: #fbefcf;
+}
+
+.assignment-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.assignment-head__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 20px;
+}
+
+.assignment-head__actions {
+  display: inline-flex;
+  gap: 1px;
+  opacity: 0.65;
+}
+
+.assignment-col:hover .assignment-head__actions {
+  opacity: 1;
+}
+
+.assignment-head__title {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 11.5px;
+  font-weight: 800;
+  color: var(--navy-950);
+  line-height: 1.28;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.assignment-head__desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 9.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: #8a96a2;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.assignment-head__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 9px;
+  font-weight: 600;
+  color: #7c8996;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.assignment-head__meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.assignment-head .lesson-chip {
+  width: auto;
+  height: auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 8px;
+}
+
+.assignment-head__due {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 8.5px;
+  font-weight: 600;
+  color: #7b8794;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.assignment-head__due.is-overdue {
+  color: #b3261e;
+  font-weight: 800;
+}
+
+.grade-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.grade-confirm p {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.grade-confirm__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 760px) {
+  .topbar__right {
+    gap: 6px;
+  }
+
+  .discipline-chip {
+    max-width: 150px;
+    padding: 5px 7px;
+  }
+
+  .discipline-chip__text span,
+  .discipline-chip svg:last-child {
+    display: none;
+  }
+
+  .discipline-picker__head {
+    gap: 10px;
+  }
+
+  .discipline-picker__icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
+
+  .journal-table--students thead th.student-col,
+  .journal-table--students tbody th.student-col {
+    min-width: 190px;
+    width: 190px;
+    max-width: 190px;
+  }
+
+  .journal-table--students thead th.assignment-col {
+    min-width: 190px;
+    width: 190px;
+    max-width: 190px;
+  }
+
+  .user-chip__text strong {
+    max-width: 130px;
+  }
+}
+
+.teacher-registered {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.teacher-registered__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  color: #1c6e4e;
+  background: #e4f5ec;
+  border: 1px solid #b9dfcb;
+}
+
+.teacher-registered h2 {
+  font-size: 20px;
+  color: var(--navy-950);
+  letter-spacing: -0.02em;
+}
+
+.teacher-registered p {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.teacher-registered__login {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 13px;
+  border-radius: 11px;
+  border: 1px dashed #cdbb8d;
+  background: #fffaf0;
+}
+
+.teacher-registered__login span {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.teacher-registered__login code {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--navy-950);
 }

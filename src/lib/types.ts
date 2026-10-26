@@ -14,8 +14,18 @@ export interface Group {
   created_at: string
 }
 
+export interface Discipline {
+  id: string
+  name: string
+  group_name: string
+  teacher_id: string
+  teacher_name: string
+  created_at: string
+}
+
 export interface Assignment {
   id: string
+  discipline_id: string | null
   title: string
   description: string
   group_name: string
@@ -108,15 +118,24 @@ export interface StudentCredentials {
   groupName?: string
 }
 
+export interface TeacherRegistration {
+  profile: Profile
+  login: string
+}
+
 export interface NewAssignment {
   title: string
   description: string
-  group_name: string
+  discipline_id: string
   grade_type: GradeType
   assigned_date: string
   lesson_number: number
   due_at: string | null
-  subject?: string
+}
+
+export interface NewDiscipline {
+  name: string
+  groupName: string
 }
 
 export interface WorkRow {

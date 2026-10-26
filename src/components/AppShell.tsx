@@ -4,11 +4,14 @@ import {
   BookOpenCheck,
   ClipboardList,
   GraduationCap,
+  Layers3,
   LogOut,
+  Repeat2,
   RotateCcw,
   Users,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { useDisciplines } from '../context/DisciplineContext'
 import { backend, isDemoMode } from '../lib/api'
 import { formatSize } from '../lib/format'
 
@@ -30,6 +33,7 @@ const ADMIN_LINKS = [
 
 export function AppShell({ role, children }: AppShellProps) {
   const { profile, logout } = useAuth()
+  const { active, select } = useDisciplines()
   const navigate = useNavigate()
   const [resetting, setResetting] = useState(false)
   const links = role === 'admin' ? ADMIN_LINKS : STUDENT_LINKS
@@ -67,6 +71,21 @@ export function AppShell({ role, children }: AppShellProps) {
           </button>
 
           <div className="topbar__right">
+            {active ? (
+              <button
+                type="button"
+                className="discipline-chip"
+                onClick={() => select(null)}
+                title="Сменить дисциплину"
+              >
+                <Layers3 size={16} />
+                <span className="discipline-chip__text">
+                  <strong>{active.name}</strong>
+                  <span>группа {active.group_name}</span>
+                </span>
+                <Repeat2 size={14} />
+              </button>
+            ) : null}
             {profile ? (
               <div className="user-chip" title={profile.full_name}>
                 <span className="avatar" aria-hidden="true">
@@ -77,7 +96,7 @@ export function AppShell({ role, children }: AppShellProps) {
                     .join('')}
                 </span>
                 <span className="user-chip__text">
-                  <strong>{profile.role === 'admin' ? 'Ксения Андреевна' : profile.full_name}</strong>
+                  <strong>{profile.full_name}</strong>
                   <span>{profile.role === 'admin' ? 'преподаватель' : `группа ${profile.group_name}`}</span>
                 </span>
               </div>
@@ -119,8 +138,10 @@ export function AppShell({ role, children }: AppShellProps) {
       <footer className="app-footer">
         <div className="app-footer__inner">
           <span>
-            {role === 'admin' ? 'Ксения Андреевна' : 'Преподаватель: Ксения Андреевна'} ·
-            Электронный дневник
+            {role === 'admin'
+              ? profile?.full_name || 'Преподаватель'
+              : `Преподаватель: ${active?.teacher_name || '—'}`}{' '}
+            · Электронный дневник
           </span>
           {isDemoMode ? (
             <span className="demo-note">
