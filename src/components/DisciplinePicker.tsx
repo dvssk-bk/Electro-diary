@@ -18,12 +18,12 @@ import { EmptyState, ErrorBox, Spinner } from './Feedback'
 import { Modal } from './Modal'
 
 export function DisciplinePicker({ role }: { role: 'student' | 'admin' }) {
-  const { disciplines, loading, error, select, refresh } = useDisciplines()
+  const { disciplines, loading, initialized, error, select, refresh } = useDisciplines()
   const toast = useToast()
   const [groups, setGroups] = useState<Group[]>([])
   const [name, setName] = useState('')
   const [groupName, setGroupName] = useState('')
-  const [showForm, setShowForm] = useState(role === 'admin' && disciplines.length === 0)
+  const [showForm, setShowForm] = useState(false)
   const [creating, setCreating] = useState(false)
   const [formError, setFormError] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<Discipline | null>(null)
@@ -47,6 +47,17 @@ export function DisciplinePicker({ role }: { role: 'student' | 'admin' }) {
       mounted = false
     }
   }, [role])
+
+  useEffect(() => {
+    if (role !== 'admin') return
+    if (disciplines.length > 0) setShowForm(false)
+  }, [role, disciplines.length])
+
+  useEffect(() => {
+    if (role === 'admin' && initialized && !loading && disciplines.length === 0) {
+      setShowForm(true)
+    }
+  }, [role, initialized, loading, disciplines.length])
 
   const createDiscipline = async (event: FormEvent) => {
     event.preventDefault()
@@ -82,7 +93,7 @@ export function DisciplinePicker({ role }: { role: 'student' | 'admin' }) {
     }
   }
 
-  if (loading) {
+  if (loading || !initialized) {
     return (
       <section className="discipline-picker">
         <Spinner label="Загружаем дисциплины…" />
@@ -107,7 +118,9 @@ export function DisciplinePicker({ role }: { role: 'student' | 'admin' }) {
           </h1>
           <p className="muted">
             {role === 'admin'
-              ? 'Дисциплина привязывается к группе. Задания и журнал внутри неё видны только этой группе.'
+              ? disciplines.length
+                ? 'Выберите существующую дисциплину или создайте новую. Дисциплина привязывается к группе, поэтому у каждой группы свой журнал.'
+                : 'Создайте первую дисциплину и привяжите её к группе. Задания и журнал внутри неё видны только этой группе.'
               : disciplines.length
                 ? 'Дисциплины вашей группы. Выберите ту, по которой хотите открыть журнал и сдать работу.'
                 : 'Преподаватель ещё не создал дисциплину для вашей группы. Загляните позже.'}
@@ -163,6 +176,28 @@ export function DisciplinePicker({ role }: { role: 'student' | 'admin' }) {
               </div>
             </article>
           ))}
+          {role === 'admin' && !showForm ? (
+            <button
+              type="button"
+              className="discipline-card discipline-card--create"
+              onClick={() => {
+                setFormError('')
+                setShowForm(true)
+              }}
+            >
+              <span className="discipline-card__top">
+                <span className="discipline-card__icon">
+                  <Plus size={19} />
+                </span>
+                <span className="discipline-card__group">новое</span>
+              </span>
+              <strong>Создать новую дисциплину</strong>
+              <span className="discipline-card__teacher">Для другой группы или предмета</span>
+              <span className="discipline-card__open">
+                Добавить <ArrowRight size={15} />
+              </span>
+            </button>
+          ) : null}
         </div>
       ) : role === 'student' ? (
         <EmptyState
@@ -172,64 +207,56 @@ export function DisciplinePicker({ role }: { role: 'student' | 'admin' }) {
         />
       ) : null}
 
-      {role === 'admin' ? (
-        showForm ? (
-          <form className="discipline-form" onSubmit={createDiscipline}>
-            <div className="discipline-form__head">
-              <h2>{disciplines.length ? 'Новая дисциплина' : 'Дисциплина и группа'}</h2>
-              <p className="muted">
-                Например: «Информатика» для группы {groupName || '211'}.
-              </p>
-            </div>
-            <label className="field">
-              <span>Название дисциплины</span>
-              <input
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="Информатика"
-                maxLength={150}
-                required
-              />
-            </label>
-            <label className="field">
-              <span>Группа</span>
-              <select
-                value={groupName}
-                onChange={(event) => setGroupName(event.target.value)}
-                required
+      {role === 'admin' && (showForm || disciplines.length === 0) ? (
+        <form className="discipline-form" onSubmit={createDiscipline}>
+          <div className="discipline-form__head">
+            <h2>{disciplines.length ? 'Новая дисциплина' : 'Дисциплина и группа'}</h2>
+            <p className="muted">Например: «Информатика» для группы {groupName || '211'}.</p>
+          </div>
+          <label className="field">
+            <span>Название дисциплины</span>
+            <input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Информатика"
+              maxLength={150}
+              required
+            />
+          </label>
+          <label className="field">
+            <span>Группа</span>
+            <select
+              value={groupName}
+              onChange={(event) => setGroupName(event.target.value)}
+              required
+            >
+              {groups.map((group) => (
+                <option key={group.name} value={group.name}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {formError ? <ErrorBox>{formError}</ErrorBox> : null}
+          <div className="discipline-form__actions">
+            <button className="btn btn-primary" type="submit" disabled={creating}>
+              {creating ? <Loader2 className="spin" size={16} /> : <Plus size={16} />}
+              Создать дисциплину
+            </button>
+            {disciplines.length ? (
+              <button
+                className="btn btn-ghost"
+                type="button"
+                onClick={() => {
+                  setShowForm(false)
+                  setFormError('')
+                }}
               >
-                {groups.map((group) => (
-                  <option key={group.name} value={group.name}>
-                    {group.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {formError ? <ErrorBox>{formError}</ErrorBox> : null}
-            <div className="discipline-form__actions">
-              <button className="btn btn-primary" type="submit" disabled={creating}>
-                {creating ? <Loader2 className="spin" size={16} /> : <Plus size={16} />}
-                Создать дисциплину
+                Отмена
               </button>
-              {disciplines.length ? (
-                <button
-                  className="btn btn-ghost"
-                  type="button"
-                  onClick={() => {
-                    setShowForm(false)
-                    setFormError('')
-                  }}
-                >
-                  Отмена
-                </button>
-              ) : null}
-            </div>
-          </form>
-        ) : (
-          <button className="btn btn-ghost discipline-add" type="button" onClick={() => setShowForm(true)}>
-            <Plus size={16} /> Добавить дисциплину
-          </button>
-        )
+            ) : null}
+          </div>
+        </form>
       ) : null}
 
       <Modal

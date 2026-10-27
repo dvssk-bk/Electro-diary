@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -15,6 +16,7 @@ interface DisciplineContextValue {
   disciplines: Discipline[]
   active: Discipline | null
   loading: boolean
+  initialized: boolean
   error: string
   select: (id: string | null) => void
   refresh: () => Promise<void>
@@ -39,8 +41,24 @@ export function DisciplineProvider({ children }: { children: ReactNode }) {
   const [disciplines, setDisciplines] = useState<Discipline[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [initialized, setInitialized] = useState(false)
   const [error, setError] = useState('')
   const profileId = profile?.id ?? null
+  const previousProfileId = useRef<string | null>(null)
+
+  // После выхода из аккаунта не возвращаем преподавателя сразу в последнюю
+  // дисциплину: при следующем входе он должен увидеть экран выбора.
+  useEffect(() => {
+    const previous = previousProfileId.current
+    if (previous && previous !== profileId) {
+      try {
+        localStorage.removeItem(storageKey(previous))
+      } catch {
+        // localStorage может быть недоступен в приватном режиме.
+      }
+    }
+    previousProfileId.current = profileId
+  }, [profileId])
 
   const load = useCallback(
     async (keepSelection: boolean) => {
@@ -63,7 +81,9 @@ export function DisciplineProvider({ children }: { children: ReactNode }) {
           const saved = savedDiscipline(profileId)
           const savedValid = saved && list.some((item) => item.id === saved) ? saved : null
           if (savedValid) return savedValid
-          if (list.length === 1) return list[0].id
+          // Преподаватель всегда выбирает дисциплину явно. Студенту с одной
+          // дисциплиной удобнее сразу открыть её.
+          if (profile?.role === 'student' && list.length === 1) return list[0].id
           return null
         })
       } catch (err) {
@@ -72,14 +92,16 @@ export function DisciplineProvider({ children }: { children: ReactNode }) {
         setError((err as Error).message)
       } finally {
         setLoading(false)
+        setInitialized(true)
       }
     },
-    [profileId],
+    [profileId, profile?.role],
   )
 
   useEffect(() => {
     setDisciplines([])
     setActiveId(null)
+    setInitialized(false)
     void load(false)
   }, [load])
 
@@ -104,8 +126,8 @@ export function DisciplineProvider({ children }: { children: ReactNode }) {
   const active = disciplines.find((item) => item.id === activeId) ?? null
 
   const value = useMemo(
-    () => ({ disciplines, active, loading, error, select, refresh }),
-    [disciplines, active, loading, error, select, refresh],
+    () => ({ disciplines, active, loading, initialized, error, select, refresh }),
+    [disciplines, active, loading, initialized, error, select, refresh],
   )
 
   return <DisciplineContext.Provider value={value}>{children}</DisciplineContext.Provider>

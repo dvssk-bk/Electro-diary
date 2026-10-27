@@ -4669,6 +4669,43 @@ svg {
   box-shadow: 0 12px 28px rgba(30, 45, 64, 0.12);
 }
 
+.discipline-card--create {
+  justify-content: center;
+  min-height: 154px;
+  border-style: dashed;
+  border-color: #c8d7e8;
+  background: #f8fbff;
+  box-shadow: none;
+  cursor: pointer;
+  font: inherit;
+}
+
+.discipline-card--create:hover {
+  border-color: #93b6dc;
+  background: #f2f8ff;
+  box-shadow: 0 10px 24px rgba(42, 90, 140, 0.1);
+}
+
+.discipline-card--create .discipline-card__icon {
+  color: #2f6499;
+  background: #e7f1fc;
+  border-color: #cfe1f5;
+}
+
+.discipline-card--create .discipline-card__group {
+  color: #3b6f9f;
+  background: #edf5fd;
+  border-color: #d5e6f7;
+}
+
+.discipline-card--create strong {
+  color: var(--navy-800);
+}
+
+.discipline-card--create .discipline-card__open {
+  color: var(--blue-700);
+}
+
 .discipline-card__top {
   display: flex;
   align-items: center;
