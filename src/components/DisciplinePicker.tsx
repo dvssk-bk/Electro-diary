@@ -1,10 +1,21 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { ArrowRight, BookOpenCheck, Layers3, Loader2, Plus, Users } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import {
+  ArrowRight,
+  BookOpenCheck,
+  Layers3,
+  Loader2,
+  Plus,
+  Trash2,
+  UserRound,
+  Users,
+} from 'lucide-react'
 import { useDisciplines } from '../context/DisciplineContext'
 import { useToast } from '../context/ToastContext'
 import { backend } from '../lib/api'
-import type { Group } from '../lib/types'
+import type { Discipline, Group } from '../lib/types'
 import { EmptyState, ErrorBox, Spinner } from './Feedback'
+import { Modal } from './Modal'
 
 export function DisciplinePicker({ role }: { role: 'student' | 'admin' }) {
   const { disciplines, loading, error, select, refresh } = useDisciplines()
@@ -15,6 +26,9 @@ export function DisciplinePicker({ role }: { role: 'student' | 'admin' }) {
   const [showForm, setShowForm] = useState(role === 'admin' && disciplines.length === 0)
   const [creating, setCreating] = useState(false)
   const [formError, setFormError] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState<Discipline | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   useEffect(() => {
     if (role !== 'admin') return
@@ -49,6 +63,22 @@ export function DisciplinePicker({ role }: { role: 'student' | 'admin' }) {
       setFormError((err as Error).message)
     } finally {
       setCreating(false)
+    }
+  }
+
+  const removeDiscipline = async () => {
+    if (!deleteTarget) return
+    setDeleteError('')
+    setDeleting(true)
+    try {
+      await backend.disciplines.remove(deleteTarget.id)
+      await refresh()
+      toast.success(`Дисциплина «${deleteTarget.name}» удалена`)
+      setDeleteTarget(null)
+    } catch (err) {
+      setDeleteError((err as Error).message)
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -91,26 +121,47 @@ export function DisciplinePicker({ role }: { role: 'student' | 'admin' }) {
       {disciplines.length ? (
         <div className="discipline-grid">
           {disciplines.map((discipline) => (
-            <button
-              key={discipline.id}
-              type="button"
-              className="discipline-card"
-              onClick={() => select(discipline.id)}
-            >
-              <span className="discipline-card__top">
-                <span className="discipline-card__icon">
-                  <BookOpenCheck size={19} />
+            <article className="discipline-card" key={discipline.id}>
+              <button
+                type="button"
+                className="discipline-card__select"
+                onClick={() => select(discipline.id)}
+              >
+                <span className="discipline-card__top">
+                  <span className="discipline-card__icon">
+                    <BookOpenCheck size={19} />
+                  </span>
+                  <span className="discipline-card__group">
+                    <Users size={13} /> группа {discipline.group_name}
+                  </span>
                 </span>
-                <span className="discipline-card__group">
-                  <Users size={13} /> группа {discipline.group_name}
+                <strong>{discipline.name}</strong>
+                <span className="discipline-card__open">
+                  Открыть <ArrowRight size={15} />
                 </span>
-              </span>
-              <strong>{discipline.name}</strong>
-              <span className="discipline-card__teacher">{discipline.teacher_name}</span>
-              <span className="discipline-card__open">
-                Открыть <ArrowRight size={15} />
-              </span>
-            </button>
+              </button>
+              <div className="discipline-card__foot">
+                <Link
+                  className="discipline-card__teacher"
+                  to={`/teacher/${discipline.teacher_id}`}
+                  title="Открыть профиль преподавателя"
+                >
+                  <UserRound size={14} /> {discipline.teacher_name}
+                </Link>
+                {role === 'admin' ? (
+                  <button
+                    type="button"
+                    className="text-btn text-btn--danger"
+                    onClick={() => {
+                      setDeleteTarget(discipline)
+                      setDeleteError('')
+                    }}
+                  >
+                    <Trash2 size={13} /> Удалить
+                  </button>
+                ) : null}
+              </div>
+            </article>
           ))}
         </div>
       ) : role === 'student' ? (
@@ -180,6 +231,53 @@ export function DisciplinePicker({ role }: { role: 'student' | 'admin' }) {
           </button>
         )
       ) : null}
+
+      <Modal
+        open={Boolean(deleteTarget)}
+        onClose={() => {
+          if (deleting) return
+          setDeleteTarget(null)
+          setDeleteError('')
+        }}
+        title="Удалить дисциплину?"
+        subtitle={
+          deleteTarget
+            ? `«${deleteTarget.name}» · группа ${deleteTarget.group_name}`
+            : undefined
+        }
+        size="sm"
+        closeOnBackdrop={!deleting}
+        footer={
+          <>
+            <button
+              type="button"
+              className="btn btn--ghost"
+              onClick={() => {
+                setDeleteTarget(null)
+                setDeleteError('')
+              }}
+              disabled={deleting}
+            >
+              Отмена
+            </button>
+            <button
+              type="button"
+              className="btn btn--danger"
+              onClick={removeDiscipline}
+              disabled={deleting}
+            >
+              {deleting ? <Loader2 className="spin" size={16} /> : <Trash2 size={16} />}
+              Удалить навсегда
+            </button>
+          </>
+        }
+      >
+        <p className="muted">
+          Вместе с дисциплиной удалятся все её задания, сдачи, замечания и файлы. Это действие
+          нельзя отменить.
+        </p>
+        {deleteError ? <ErrorBox>{deleteError}</ErrorBox> : null}
+      </Modal>
     </section>
   )
 }

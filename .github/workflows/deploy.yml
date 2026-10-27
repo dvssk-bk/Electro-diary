@@ -35,9 +35,9 @@ jobs:
           VITE_BASE: /${{ github.event.repository.name }}/
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
-          VITE_SUBJECT_NAME: ${{ vars.VITE_SUBJECT_NAME }}
-          VITE_ENABLE_EDITING: ${{ vars.VITE_ENABLE_EDITING }}
-          VITE_ONLYOFFICE_URL: ${{ vars.VITE_ONLYOFFICE_URL }}
+          VITE_SUBJECT_NAME: ${{ vars.VITE_SUBJECT_NAME || secrets.VITE_SUBJECT_NAME }}
+          VITE_ENABLE_EDITING: ${{ vars.VITE_ENABLE_EDITING || secrets.VITE_ENABLE_EDITING }}
+          VITE_ONLYOFFICE_URL: ${{ vars.VITE_ONLYOFFICE_URL || secrets.VITE_ONLYOFFICE_URL }}
         run: npm run build
 
       - name: Upload Pages artifact

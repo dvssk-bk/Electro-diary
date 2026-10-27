@@ -88,8 +88,11 @@ export function StudentJournalPage() {
                 {active.name} · группа {active.group_name}
               </h1>
               <p>
-                {profile.full_name} · преподаватель {active.teacher_name}. Ваша строка
-                подсвечена цветом.
+                {profile.full_name} · преподаватель{' '}
+                <Link className="teacher-link" to={`/teacher/${active.teacher_id}`}>
+                  {active.teacher_name}
+                </Link>
+                . Ваша строка подсвечена цветом.
               </p>
             </div>
             <div className="page-head__actions">

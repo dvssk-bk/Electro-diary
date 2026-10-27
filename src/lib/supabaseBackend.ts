@@ -11,7 +11,9 @@ import type {
   StudentCredentials,
   Submission,
   SubmissionVersion,
+  TeacherProfileInput,
   TeacherRegistration,
+  TestDataResult,
   UploadProgress,
   WorkRow,
 } from './types'
@@ -19,20 +21,65 @@ import type { AnnotationInput, Backend, SubmissionFilters } from './backend'
 import { supabase, supabaseAnonKey, supabaseUrl } from './supabase'
 import { extensionOf, safeMime, sanitizeFileName } from './fileTypes'
 import { validateGrade } from './grades'
+import { normalizeTeacherProfile, validateTeacherProfile } from './profile'
+import { buildTestAssignments, TEST_STUDENTS } from './testData'
 
 function client(): SupabaseClient {
   if (!supabase) throw new Error('Supabase не настроен')
   return supabase
 }
 
+interface ProfileRow {
+  id: string
+  role: 'student' | 'admin'
+  full_name: string
+  group_name: string | null
+  created_at: string
+  avatar_path: string | null
+  contact_email: string | null
+  phone: string | null
+  bio: string | null
+}
+
+function avatarPublicUrl(path: string | null | undefined): string | null {
+  if (!path) return null
+  const { data } = client().storage.from('avatars').getPublicUrl(path)
+  return data.publicUrl || null
+}
+
+function mapProfile(row: ProfileRow): Profile {
+  return {
+    id: row.id,
+    role: row.role,
+    full_name: row.full_name,
+    group_name: row.group_name,
+    created_at: row.created_at,
+    avatar_url: avatarPublicUrl(row.avatar_path),
+    contact_email: row.contact_email,
+    phone: row.phone,
+    bio: row.bio,
+  }
+}
+
+const PROFILE_SELECT =
+  'id, role, full_name, group_name, created_at, avatar_path, contact_email, phone, bio'
+
 async function fetchProfile(id: string): Promise<Profile | null> {
   const { data, error } = await client()
     .from('profiles')
-    .select('id, role, full_name, group_name, created_at')
+    .select(PROFILE_SELECT)
     .eq('id', id)
     .maybeSingle()
   if (error) throw new Error(error.message)
-  return (data as Profile | null) ?? null
+  return data ? mapProfile(data as ProfileRow) : null
+}
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const result: T[][] = []
+  for (let index = 0; index < items.length; index += size) {
+    result.push(items.slice(index, index + size))
+  }
+  return result
 }
 
 async function requireProfile(): Promise<Profile> {
@@ -415,6 +462,154 @@ export const supabaseBackend: Backend = {
         )
       }
       return { ...(data as Omit<Discipline, 'teacher_name'>), teacher_name: admin.full_name }
+    },
+    async remove(id: string) {
+      const admin = await requireAdmin()
+      await loadOwnedDiscipline(id, admin.id)
+      const db = client()
+
+      const { data: assignments, error: assignmentsError } = await db
+        .from('assignments')
+        .select('id')
+        .eq('discipline_id', id)
+      if (assignmentsError) throw new Error(assignmentsError.message)
+      const assignmentIds = (assignments ?? []).map((row: { id: string }) => row.id)
+
+      const paths = new Set<string>()
+      if (assignmentIds.length) {
+        for (const ids of chunk(assignmentIds, 100)) {
+          const { data: submissions, error: submissionsError } = await db
+            .from('submissions')
+            .select('id, file_path')
+            .in('assignment_id', ids)
+          if (submissionsError) throw new Error(submissionsError.message)
+          const submissionIds: string[] = []
+          for (const submission of (submissions ?? []) as {
+            id: string
+            file_path: string | null
+          }[]) {
+            submissionIds.push(submission.id)
+            if (submission.file_path) paths.add(submission.file_path)
+          }
+          for (const submissionIdsChunk of chunk(submissionIds, 100)) {
+            const { data: versions, error: versionsError } = await db
+              .from('submission_versions')
+              .select('file_path')
+              .in('submission_id', submissionIdsChunk)
+            if (versionsError) throw new Error(versionsError.message)
+            for (const version of (versions ?? []) as { file_path: string | null }[]) {
+              if (version.file_path) paths.add(version.file_path)
+            }
+          }
+        }
+      }
+
+      // Сначала удаляем файлы, пока строки сдач ещё существуют: Storage-политика
+      // проверяет путь через submissions/submission_versions.
+      for (const pathChunk of chunk([...paths], 100)) {
+        if (!pathChunk.length) continue
+        const { error: storageError } = await db.storage.from('submissions').remove(pathChunk)
+        if (storageError) throw new Error(storageError.message)
+      }
+
+      const { error } = await db.from('disciplines').delete().eq('id', id)
+      if (error) throw new Error(error.message)
+    },
+  },
+
+  profiles: {
+    async getTeacher(id: string): Promise<Profile | null> {
+      const { data, error } = await client()
+        .from('teacher_profiles')
+        .select('id, full_name, avatar_path, contact_email, phone, bio, created_at')
+        .eq('id', id)
+        .maybeSingle()
+      if (error) throw new Error(error.message)
+      if (!data) return null
+      const row = data as Omit<ProfileRow, 'role' | 'group_name'>
+      return {
+        id: row.id,
+        role: 'admin',
+        full_name: row.full_name,
+        group_name: null,
+        created_at: row.created_at,
+        avatar_url: avatarPublicUrl(row.avatar_path),
+        contact_email: row.contact_email,
+        phone: row.phone,
+        bio: row.bio,
+      }
+    },
+    async updateMine(input: TeacherProfileInput): Promise<Profile> {
+      const admin = await requireAdmin()
+      const value = normalizeTeacherProfile(input)
+      const message = validateTeacherProfile(value)
+      if (message) throw new Error(message)
+      const { data, error } = await client()
+        .from('profiles')
+        .update({
+          contact_email: value.contact_email,
+          phone: value.phone,
+          bio: value.bio,
+        })
+        .eq('id', admin.id)
+        .select(PROFILE_SELECT)
+        .single()
+      if (error) throw new Error(error.message)
+      return mapProfile(data as ProfileRow)
+    },
+    async uploadAvatar(file: File): Promise<Profile> {
+      const admin = await requireAdmin()
+      const db = client()
+      const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
+      const path = `${admin.id}/${crypto.randomUUID()}.${ext}`
+      const { error: uploadError } = await db.storage.from('avatars').upload(path, file, {
+        contentType: file.type,
+        upsert: false,
+      })
+      if (uploadError) throw new Error(uploadError.message)
+
+      const { data: old } = await db
+        .from('profiles')
+        .select('avatar_path')
+        .eq('id', admin.id)
+        .maybeSingle()
+
+      const { data, error } = await db
+        .from('profiles')
+        .update({ avatar_path: path })
+        .eq('id', admin.id)
+        .select(PROFILE_SELECT)
+        .single()
+      if (error) {
+        await db.storage.from('avatars').remove([path])
+        throw new Error(error.message)
+      }
+
+      const oldPath = (old as { avatar_path: string | null } | null)?.avatar_path ?? null
+      if (oldPath && oldPath !== path) {
+        await db.storage.from('avatars').remove([oldPath])
+      }
+      return mapProfile(data as ProfileRow)
+    },
+    async removeAvatar(): Promise<Profile> {
+      const admin = await requireAdmin()
+      const db = client()
+      const { data: old } = await db
+        .from('profiles')
+        .select('avatar_path')
+        .eq('id', admin.id)
+        .maybeSingle()
+      const oldPath = (old as { avatar_path: string | null } | null)?.avatar_path ?? null
+
+      const { data, error } = await db
+        .from('profiles')
+        .update({ avatar_path: null })
+        .eq('id', admin.id)
+        .select(PROFILE_SELECT)
+        .single()
+      if (error) throw new Error(error.message)
+      if (oldPath) await db.storage.from('avatars').remove([oldPath])
+      return mapProfile(data as ProfileRow)
     },
   },
 
@@ -979,6 +1174,97 @@ export const supabaseBackend: Backend = {
       if (versionsError) throw new Error(versionsError.message)
 
       return ids.length
+    },
+  },
+
+  testData: {
+    async seed(disciplineId: string): Promise<TestDataResult> {
+      const admin = await requireAdmin()
+      const discipline = await loadOwnedDiscipline(disciplineId, admin.id)
+      const db = client()
+      const errors: string[] = []
+
+      const { data: existingStudents, error: studentsError } = await db
+        .from('profiles')
+        .select('full_name')
+        .eq('group_name', discipline.group_name)
+        .eq('role', 'student')
+      if (studentsError) throw new Error(studentsError.message)
+      const existingNames = new Set(
+        ((existingStudents ?? []) as { full_name: string }[]).map((row) =>
+          row.full_name.toLocaleLowerCase('ru-RU'),
+        ),
+      )
+      const missingStudents = TEST_STUDENTS.filter(
+        (name) => !existingNames.has(name.toLocaleLowerCase('ru-RU')),
+      )
+
+      let studentsCreated = 0
+      for (const names of chunk([...missingStudents], 5)) {
+        const results = await Promise.allSettled(
+          names.map(async (fullName) => {
+            const { data, error } = await db.functions.invoke('register', {
+              body: { fullName, groupName: discipline.group_name },
+            })
+            if (error) {
+              throw new Error(await edgeFunctionError(error, 'Не удалось создать студента'))
+            }
+            if (data?.error) throw new Error(String(data.error))
+          }),
+        )
+        results.forEach((result, index) => {
+          if (result.status === 'fulfilled') {
+            studentsCreated += 1
+          } else {
+            errors.push(`${names[index]}: ${(result.reason as Error).message}`)
+          }
+        })
+      }
+
+      const { data: existingAssignments, error: assignmentsError } = await db
+        .from('assignments')
+        .select('title')
+        .eq('discipline_id', disciplineId)
+      if (assignmentsError) throw new Error(assignmentsError.message)
+      const existingTitles = new Set(
+        ((existingAssignments ?? []) as { title: string }[]).map((row) =>
+          row.title.toLocaleLowerCase('ru-RU'),
+        ),
+      )
+      const generatedAll = buildTestAssignments()
+      const generated = generatedAll.filter(
+        (assignment) => !existingTitles.has(assignment.title.toLocaleLowerCase('ru-RU')),
+      )
+
+      let assignmentsCreated = 0
+      for (const rows of chunk(generated, 10)) {
+        const { error } = await db.from('assignments').insert(
+          rows.map((assignment) => ({
+            discipline_id: discipline.id,
+            title: assignment.title,
+            description: assignment.description,
+            group_name: discipline.group_name,
+            subject: discipline.name,
+            grade_type: assignment.grade_type,
+            assigned_date: assignment.assigned_date,
+            lesson_number: assignment.lesson_number,
+            due_at: assignment.due_at,
+          })),
+        )
+        if (error) {
+          errors.push(error.message)
+        } else {
+          assignmentsCreated += rows.length
+        }
+      }
+
+      return {
+        studentsCreated,
+        assignmentsCreated,
+        studentsSkipped: TEST_STUDENTS.length - missingStudents.length,
+        assignmentsSkipped: generatedAll.length - generated.length,
+        errors,
+      }
     },
   },
 

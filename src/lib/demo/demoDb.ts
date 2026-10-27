@@ -114,6 +114,10 @@ export function coerceProfile(value: Profile): Profile {
     full_name: value.full_name,
     group_name: value.group_name,
     created_at: value.created_at,
+    avatar_url: value.avatar_url ?? null,
+    contact_email: value.contact_email ?? null,
+    phone: value.phone ?? null,
+    bio: value.bio ?? null,
   }
 }
 

@@ -10,7 +10,9 @@ import type {
   StudentCredentials,
   Submission,
   SubmissionVersion,
+  TeacherProfileInput,
   TeacherRegistration,
+  TestDataResult,
   UploadProgress,
   WorkRow,
 } from './types'
@@ -43,6 +45,13 @@ export interface Backend {
   disciplines: {
     list: () => Promise<Discipline[]>
     create: (input: NewDiscipline) => Promise<Discipline>
+    remove: (id: string) => Promise<void>
+  }
+  profiles: {
+    getTeacher: (id: string) => Promise<Profile | null>
+    updateMine: (input: TeacherProfileInput) => Promise<Profile>
+    uploadAvatar: (file: File) => Promise<Profile>
+    removeAvatar: () => Promise<Profile>
   }
   groups: {
     list: () => Promise<Group[]>
@@ -80,6 +89,10 @@ export interface Backend {
     list: (submissionId: string) => Promise<Annotation[]>
     create: (input: AnnotationInput) => Promise<Annotation>
     remove: (id: string) => Promise<void>
+  }
+  testData: {
+    /** Добавляет 30 тестовых студентов и 50 заданий в выбранную дисциплину. */
+    seed: (disciplineId: string) => Promise<TestDataResult>
   }
   files: {
     blob: (path: string) => Promise<Blob>

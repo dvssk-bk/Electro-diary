@@ -125,8 +125,12 @@ export function StudentAssignmentsPage() {
           <span className="eyebrow">Учебные работы</span>
           <h1>{active.name} · мои задания</h1>
           <p>
-            Группа {active.group_name} · сдано {submittedCount} из{' '}
-            {assignments.length} {plural(assignments.length, ['задания', 'заданий', 'заданий'])}
+            Группа {active.group_name} ·{' '}
+            <Link className="teacher-link" to={`/teacher/${active.teacher_id}`}>
+              {active.teacher_name}
+            </Link>{' '}
+            · сдано {submittedCount} из {assignments.length}{' '}
+            {plural(assignments.length, ['задания', 'заданий', 'заданий'])}
           </p>
         </div>
         <div className="page-head__actions">

@@ -7,6 +7,24 @@ export interface Profile {
   full_name: string
   group_name: string | null
   created_at: string
+  avatar_url?: string | null
+  contact_email?: string | null
+  phone?: string | null
+  bio?: string | null
+}
+
+export interface TeacherProfileInput {
+  contact_email: string | null
+  phone: string | null
+  bio: string | null
+}
+
+export interface TestDataResult {
+  studentsCreated: number
+  assignmentsCreated: number
+  studentsSkipped: number
+  assignmentsSkipped: number
+  errors: string[]
 }
 
 export interface Group {

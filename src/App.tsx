@@ -9,7 +9,22 @@ import { StudentAssignmentsPage } from './pages/StudentAssignmentsPage'
 import { AdminJournalPage } from './pages/AdminJournalPage'
 import { AdminAssignmentsPage } from './pages/AdminAssignmentsPage'
 import { AdminGroupsPage } from './pages/AdminGroupsPage'
+import { TeacherProfilePage } from './pages/TeacherProfilePage'
 import { Loader2 } from 'lucide-react'
+
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { profile, loading } = useAuth()
+  if (loading) {
+    return (
+      <div className="app-loading">
+        <Loader2 className="spin" size={30} />
+        <span>Открываем дневник…</span>
+      </div>
+    )
+  }
+  if (!profile) return <Navigate to="/" replace />
+  return <>{children}</>
+}
 
 function RequireRole({ role, children }: { role: 'student' | 'admin'; children: React.ReactNode }) {
   const { profile, loading } = useAuth()
@@ -79,6 +94,22 @@ export default function App() {
               <RequireRole role="admin">
                 <AdminGroupsPage />
               </RequireRole>
+            }
+          />
+          <Route
+            path="/admin/profile"
+            element={
+              <RequireRole role="admin">
+                <TeacherProfilePage self />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/teacher/:teacherId"
+            element={
+              <RequireAuth>
+                <TeacherProfilePage />
+              </RequireAuth>
             }
           />
           <Route path="*" element={<Navigate to="/" replace />} />

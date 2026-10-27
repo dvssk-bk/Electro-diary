@@ -10,7 +10,9 @@ import type {
   StudentCredentials,
   Submission,
   SubmissionVersion,
+  TeacherProfileInput,
   TeacherRegistration,
+  TestDataResult,
   UploadProgress,
   WorkRow,
 } from '../types'
@@ -30,6 +32,9 @@ import {
 } from './demoDb'
 import { extensionOf, fileKind, safeMime, sanitizeFileName } from '../fileTypes'
 import { validateGrade } from '../grades'
+import { normalizeTeacherProfile, validateTeacherProfile } from '../profile'
+import { buildTestAssignments, TEST_STUDENTS } from '../testData'
+import { readFileAsDataUrl } from '../avatar'
 
 const listeners = new Set<(profile: Profile | null) => void>()
 
@@ -157,6 +162,35 @@ async function deleteFilesForSubmission(
     version.file_deleted_at = deletedAt
   }
   return true
+}
+
+async function removeDisciplineData(
+  db: ReturnType<typeof loadDb>,
+  disciplineId: string,
+): Promise<void> {
+  const assignmentIds = new Set(
+    db.assignments
+      .filter((assignment) => assignment.discipline_id === disciplineId)
+      .map((assignment) => assignment.id),
+  )
+  const submissions = db.submissions.filter((submission) =>
+    assignmentIds.has(submission.assignment_id),
+  )
+  for (const submission of submissions) {
+    if (submission.file_path) await deleteDemoFile(submission.file_path)
+  }
+  const submissionIds = new Set(submissions.map((submission) => submission.id))
+  for (const version of db.versions.filter((item) => submissionIds.has(item.submission_id))) {
+    if (version.file_path) await deleteDemoFile(version.file_path)
+  }
+
+  db.submissions = db.submissions.filter((submission) => !submissionIds.has(submission.id))
+  db.versions = db.versions.filter((version) => !submissionIds.has(version.submission_id))
+  db.annotations = db.annotations.filter(
+    (annotation) => !submissionIds.has(annotation.submission_id),
+  )
+  db.assignments = db.assignments.filter((assignment) => !assignmentIds.has(assignment.id))
+  db.disciplines = db.disciplines.filter((discipline) => discipline.id !== disciplineId)
 }
 
 async function simulateProgress(onProgress?: UploadProgress): Promise<void> {
@@ -391,6 +425,63 @@ export const demoBackend: Backend = {
       db.disciplines.push(discipline)
       saveDb()
       return { ...discipline }
+    },
+    async remove(id: string) {
+      const admin = requireAdmin()
+      const db = loadDb()
+      const discipline = findDiscipline(db, id)
+      if (!discipline) throw new Error('Дисциплина не найдена')
+      if (discipline.teacher_id !== admin.id) {
+        throw new Error('Можно удалять только свои дисциплины')
+      }
+      await removeDisciplineData(db, id)
+      saveDb()
+    },
+  },
+
+  profiles: {
+    async getTeacher(id: string) {
+      const db = loadDb()
+      const user = db.users.find(
+        (item) => item.profile.id === id && item.profile.role === 'admin',
+      )
+      return user ? coerceProfile(user.profile) : null
+    },
+    async updateMine(input: TeacherProfileInput) {
+      const admin = requireAdmin()
+      const value = normalizeTeacherProfile(input)
+      const message = validateTeacherProfile(value)
+      if (message) throw new Error(message)
+      const db = loadDb()
+      const user = db.users.find((item) => item.profile.id === admin.id)
+      if (!user) throw new Error('Профиль не найден')
+      user.profile.contact_email = value.contact_email
+      user.profile.phone = value.phone
+      user.profile.bio = value.bio
+      saveDb()
+      emit()
+      return coerceProfile(user.profile)
+    },
+    async uploadAvatar(file: File) {
+      const admin = requireAdmin()
+      const db = loadDb()
+      const user = db.users.find((item) => item.profile.id === admin.id)
+      if (!user) throw new Error('Профиль не найден')
+      const dataUrl = await readFileAsDataUrl(file)
+      user.profile.avatar_url = dataUrl
+      saveDb()
+      emit()
+      return coerceProfile(user.profile)
+    },
+    async removeAvatar() {
+      const admin = requireAdmin()
+      const db = loadDb()
+      const user = db.users.find((item) => item.profile.id === admin.id)
+      if (!user) throw new Error('Профиль не найден')
+      user.profile.avatar_url = null
+      saveDb()
+      emit()
+      return coerceProfile(user.profile)
     },
   },
 
@@ -935,6 +1026,74 @@ export const demoBackend: Backend = {
       }
       db.annotations = db.annotations.filter((item) => item.id !== id)
       saveDb()
+    },
+  },
+
+  testData: {
+    async seed(disciplineId: string): Promise<TestDataResult> {
+      const admin = requireAdmin()
+      const db = loadDb()
+      const discipline = findDiscipline(db, disciplineId)
+      if (!discipline) throw new Error('Дисциплина не найдена')
+      if (discipline.teacher_id !== admin.id) {
+        throw new Error('Тестовые данные можно добавить только в свою дисциплину')
+      }
+
+      const existingStudents = db.users.filter(
+        (user) =>
+          user.profile.role === 'student' && user.profile.group_name === discipline.group_name,
+      )
+      const existingNames = new Set(
+        existingStudents.map((user) => user.profile.full_name.toLocaleLowerCase('ru-RU')),
+      )
+      const missingStudents = TEST_STUDENTS.filter(
+        (name) => !existingNames.has(name.toLocaleLowerCase('ru-RU')),
+      )
+      for (const name of missingStudents) {
+        const login = makeLogin(name, db.users.map((user) => user.login))
+        const profile: Profile = {
+          id: demoId(),
+          role: 'student',
+          full_name: name,
+          group_name: discipline.group_name,
+          created_at: new Date().toISOString(),
+        }
+        db.users.push({ login, password: randomPassword(), profile })
+      }
+
+      const existingTitles = new Set(
+        db.assignments
+          .filter((assignment) => assignment.discipline_id === disciplineId)
+          .map((assignment) => assignment.title.toLocaleLowerCase('ru-RU')),
+      )
+      const generated = buildTestAssignments()
+      let assignmentsCreated = 0
+      for (const input of generated) {
+        if (existingTitles.has(input.title.toLocaleLowerCase('ru-RU'))) continue
+        db.assignments.push({
+          id: demoId(),
+          discipline_id: discipline.id,
+          title: input.title,
+          description: input.description,
+          group_name: discipline.group_name,
+          subject: discipline.name,
+          grade_type: input.grade_type,
+          assigned_date: input.assigned_date,
+          lesson_number: input.lesson_number,
+          due_at: input.due_at,
+          created_at: new Date().toISOString(),
+        })
+        assignmentsCreated += 1
+      }
+
+      saveDb()
+      return {
+        studentsCreated: missingStudents.length,
+        assignmentsCreated,
+        studentsSkipped: TEST_STUDENTS.length - missingStudents.length,
+        assignmentsSkipped: generated.length - assignmentsCreated,
+        errors: [],
+      }
     },
   },
 

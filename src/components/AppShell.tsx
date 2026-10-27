@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
 import {
   BookOpenCheck,
   ClipboardList,
@@ -8,12 +8,14 @@ import {
   LogOut,
   Repeat2,
   RotateCcw,
+  UserRound,
   Users,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { useDisciplines } from '../context/DisciplineContext'
 import { backend, isDemoMode } from '../lib/api'
 import { formatSize } from '../lib/format'
+import { Avatar } from './Avatar'
 
 interface AppShellProps {
   role: 'student' | 'admin'
@@ -29,6 +31,7 @@ const ADMIN_LINKS = [
   { to: '/admin/journal', label: 'Журнал', icon: ClipboardList },
   { to: '/admin/assignments', label: 'Задания', icon: BookOpenCheck },
   { to: '/admin/groups', label: 'Группы', icon: Users },
+  { to: '/admin/profile', label: 'Профиль', icon: UserRound },
 ]
 
 export function AppShell({ role, children }: AppShellProps) {
@@ -75,7 +78,10 @@ export function AppShell({ role, children }: AppShellProps) {
               <button
                 type="button"
                 className="discipline-chip"
-                onClick={() => select(null)}
+                onClick={() => {
+                  select(null)
+                  navigate(home)
+                }}
                 title="Сменить дисциплину"
               >
                 <Layers3 size={16} />
@@ -87,19 +93,27 @@ export function AppShell({ role, children }: AppShellProps) {
               </button>
             ) : null}
             {profile ? (
-              <div className="user-chip" title={profile.full_name}>
-                <span className="avatar" aria-hidden="true">
-                  {profile.full_name
-                    .split(/\s+/)
-                    .slice(0, 2)
-                    .map((part) => part[0])
-                    .join('')}
-                </span>
-                <span className="user-chip__text">
-                  <strong>{profile.full_name}</strong>
-                  <span>{profile.role === 'admin' ? 'преподаватель' : `группа ${profile.group_name}`}</span>
-                </span>
-              </div>
+              profile.role === 'admin' ? (
+                <Link
+                  to="/admin/profile"
+                  className="user-chip user-chip--link"
+                  title={`${profile.full_name} · открыть профиль`}
+                >
+                  <Avatar profile={profile} />
+                  <span className="user-chip__text">
+                    <strong>{profile.full_name}</strong>
+                    <span>преподаватель</span>
+                  </span>
+                </Link>
+              ) : (
+                <div className="user-chip" title={profile.full_name}>
+                  <Avatar profile={profile} />
+                  <span className="user-chip__text">
+                    <strong>{profile.full_name}</strong>
+                    <span>группа {profile.group_name}</span>
+                  </span>
+                </div>
+              )
             ) : null}
             <button
               type="button"
