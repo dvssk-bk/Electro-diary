@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ArrowDownAZ,
   ArrowUpAZ,
   CalendarDays,
+  ChevronDown,
   Clock3,
   Pencil,
   Plus,
@@ -60,6 +61,13 @@ export function JournalTable({
   actions,
 }: JournalTableProps) {
   const [sortMode, setSortMode] = useState<SortMode>('name-asc')
+  const [expandedStudentId, setExpandedStudentId] = useState<string | null>(
+    currentStudentId ?? null,
+  )
+
+  useEffect(() => {
+    if (currentStudentId) setExpandedStudentId(currentStudentId)
+  }, [currentStudentId])
 
   const entryMap = useMemo(() => {
     const map = new Map<string, JournalEntry>()
@@ -379,6 +387,171 @@ export function JournalTable({
           </tbody>
         </table>
       </div>
+
+      {students.length ? (
+        <div className="journal-mobile" data-testid="journal-mobile">
+          <p className="journal-mobile__hint">
+            {mode === 'admin'
+              ? 'Нажмите на студента, чтобы раскрыть задания. Нажмите на строку задания, чтобы изменить отметку.'
+              : 'Ваша строка раскрыта. Нажмите на задание, чтобы сдать работу или открыть её.'}
+          </p>
+          {students.map((student) => {
+            const stat = statsByStudent.get(student.id)
+            const isOwn = student.id === currentStudentId
+            const expanded = expandedStudentId === student.id
+            const { surname, rest } = splitName(student.full_name)
+            const initials = `${(rest || surname).slice(0, 1)}${rest ? surname.slice(0, 1) : ''}`.toUpperCase()
+            return (
+              <article
+                key={student.id}
+                className={`journal-mobile__student ${isOwn ? 'is-own' : ''} ${
+                  expanded ? 'is-open' : ''
+                }`}
+                data-testid={`mobile-student-${student.id}`}
+              >
+                <button
+                  type="button"
+                  className="journal-mobile__student-head"
+                  onClick={() => setExpandedStudentId(expanded ? null : student.id)}
+                  aria-expanded={expanded}
+                >
+                  <span className="journal-mobile__avatar">{initials}</span>
+                  <span className="journal-mobile__who">
+                    <strong>{rest || surname}</strong>
+                    <span>
+                      {rest ? surname : 'студент'} · {stat?.submitted ?? 0} из{' '}
+                      {data.assignments.length} сдано
+                    </span>
+                  </span>
+                  {isOwn ? <span className="journal-mobile__you">вы</span> : null}
+                  <ChevronDown className="journal-mobile__chevron" size={18} />
+                </button>
+
+                {expanded ? (
+                  <div className="journal-mobile__assignments">
+                    {data.assignments.length ? (
+                      data.assignments.map((assignment, index) => {
+                        const entry = entryMap.get(entryKey(assignment.id, student.id)) ?? null
+                        const isAdmin = mode === 'admin'
+                        const canSubmit = !isAdmin && isOwn && !entry
+                        const overdue = isOverdue(assignment.due_at)
+                        const showUrgent = overdue && !entry && (isAdmin || isOwn)
+                        const hasRemarks = Boolean(
+                          entry &&
+                            entry.grade == null &&
+                            entry.annotation_count > 0 &&
+                            (isAdmin || isOwn),
+                        )
+                        const actionable =
+                          isAdmin || (isOwn && Boolean(entry || canSubmit))
+                        return (
+                          <div
+                            key={assignment.id}
+                            className={`journal-mobile__assignment ${isOwn ? 'is-own' : ''}`}
+                          >
+                            <button
+                              type="button"
+                              className="journal-mobile__assignment-main"
+                              onClick={() => handleCell(student, assignment, entry)}
+                              disabled={!actionable}
+                              data-testid={`mobile-cell-${assignment.id}-${student.id}`}
+                              title={
+                                showUrgent
+                                  ? `Дедлайн прошёл: ${formatDateTime(assignment.due_at)}`
+                                  : hasRemarks
+                                    ? `Замечаний: ${entry?.annotation_count ?? 0} — нужно исправить`
+                                    : isAdmin
+                                      ? 'Изменить отметку'
+                                      : canSubmit
+                                        ? 'Сдать работу'
+                                        : entry?.grade != null
+                                          ? `Оценка: ${gradeLabel(
+                                              assignment.grade_type,
+                                              entry.grade,
+                                            )}`
+                                          : entry
+                                            ? 'Работа сдана'
+                                            : ''
+                              }
+                            >
+                              <span className="journal-mobile__index">
+                                {String(index + 1).padStart(2, '0')}
+                              </span>
+                              <span className="journal-mobile__task">
+                                <strong title={assignment.title}>{assignment.title}</strong>
+                                <span>
+                                  {formatDateShort(assignment.assigned_date)} ·{' '}
+                                  {assignment.lesson_number} пара
+                                </span>
+                                {assignment.due_at ? (
+                                  <span
+                                    className={`journal-mobile__due ${
+                                      overdue ? 'is-overdue' : ''
+                                    }`}
+                                  >
+                                    до {formatDateTime(assignment.due_at)}
+                                  </span>
+                                ) : null}
+                              </span>
+                              <span className="journal-mobile__status">
+                                {entry ? (
+                                  hasRemarks ? (
+                                    <span className="revise-cell">Исправить</span>
+                                  ) : entry.grade != null ? (
+                                    <GradeBadge
+                                      grade={entry.grade}
+                                      type={assignment.grade_type}
+                                      variant="cell"
+                                    />
+                                  ) : (
+                                    <span className="mark-plus">+</span>
+                                  )
+                                ) : showUrgent ? (
+                                  <span className="urgent-cell">Срочно сдать!</span>
+                                ) : canSubmit ? (
+                                  <span className="submit-cell-btn">
+                                    <Plus size={12} /> Сдать
+                                  </span>
+                                ) : (
+                                  <span className="cell-empty" aria-label="Не сдано" />
+                                )}
+                              </span>
+                            </button>
+                            {isAdmin ? (
+                              <span className="journal-mobile__assignment-actions">
+                                <button
+                                  type="button"
+                                  className="mini-icon-btn"
+                                  title="Редактировать задание"
+                                  aria-label="Редактировать задание"
+                                  onClick={() => onEditAssignment?.(assignment)}
+                                >
+                                  <Pencil size={13} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="mini-icon-btn mini-icon-btn--danger"
+                                  title="Удалить задание"
+                                  aria-label="Удалить задание"
+                                  onClick={() => onDeleteAssignment?.(assignment)}
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </span>
+                            ) : null}
+                          </div>
+                        )
+                      })
+                    ) : (
+                      <div className="journal-mobile__empty">Заданий пока нет.</div>
+                    )}
+                  </div>
+                ) : null}
+              </article>
+            )
+          })}
+        </div>
+      ) : null}
 
       <footer className="journal-legend">
         <span>

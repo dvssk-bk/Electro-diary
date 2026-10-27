@@ -25,15 +25,16 @@ import { useDisciplines } from '../context/DisciplineContext'
 import { backend } from '../lib/api'
 import { formatDate, formatDateTime, formatSize, plural } from '../lib/format'
 import { gradeLabel, isOverdue } from '../lib/grades'
-import type { Assignment, Submission } from '../lib/types'
+import type { Assignment, JournalEntry, Submission } from '../lib/types'
 
-type Filter = 'all' | 'todo' | 'sent' | 'graded'
+type Filter = 'all' | 'todo' | 'sent' | 'revise' | 'graded'
 
 export function StudentAssignmentsPage() {
   const { profile } = useAuth()
   const { active, loading: disciplinesLoading } = useDisciplines()
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [submissions, setSubmissions] = useState<Submission[]>([])
+  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
@@ -46,29 +47,38 @@ export function StudentAssignmentsPage() {
     if (!active) {
       setAssignments([])
       setSubmissions([])
+      setJournalEntries([])
       setLoading(false)
       return
     }
     setLoading(true)
     setError('')
     try {
-      const [assignmentList, allSubmissions] = await Promise.all([
+      const [assignmentList, allSubmissions, journal] = await Promise.all([
         backend.assignments.list(active.id),
         backend.submissions.mine(),
+        backend.journal(active.id),
       ])
       const assignmentIds = new Set(assignmentList.map((assignment) => assignment.id))
       setAssignments(assignmentList)
       setSubmissions(allSubmissions.filter((submission) => assignmentIds.has(submission.assignment_id)))
+      setJournalEntries(
+        journal.entries.filter((entry) => entry.student_id === profile?.id),
+      )
     } catch (err) {
       setError((err as Error).message)
     } finally {
       setLoading(false)
     }
-  }, [active])
+  }, [active, profile?.id])
 
   useEffect(() => {
     if (!disciplinesLoading) void load()
   }, [load, refreshKey, disciplinesLoading])
+
+  useEffect(() => {
+    setFilter('all')
+  }, [active?.id])
 
   const byAssignment = useMemo(() => {
     const map = new Map<string, Submission>()
@@ -76,21 +86,36 @@ export function StudentAssignmentsPage() {
     return map
   }, [submissions])
 
+  const reviseIds = useMemo(
+    () =>
+      new Set(
+        journalEntries
+          .filter((entry) => entry.grade == null && entry.annotation_count > 0)
+          .map((entry) => entry.assignment_id),
+      ),
+    [journalEntries],
+  )
+
   const submittedCount = assignments.filter((assignment) => byAssignment.has(assignment.id)).length
   const gradedCount = assignments.filter(
     (assignment) => byAssignment.get(assignment.id)?.grade != null,
   ).length
+  const reviseCount = assignments.filter((assignment) => reviseIds.has(assignment.id)).length
+  const sentCount = Math.max(0, submittedCount - gradedCount - reviseCount)
   const progress = assignments.length ? Math.round((submittedCount / assignments.length) * 100) : 0
 
   const filtered = useMemo(() => {
     return assignments.filter((assignment) => {
       const submission = byAssignment.get(assignment.id)
       if (filter === 'todo') return !submission
-      if (filter === 'sent') return Boolean(submission && submission.grade == null)
+      if (filter === 'revise') return reviseIds.has(assignment.id)
+      if (filter === 'sent') {
+        return Boolean(submission && submission.grade == null && !reviseIds.has(assignment.id))
+      }
       if (filter === 'graded') return submission?.grade != null
       return true
     })
-  }, [assignments, byAssignment, filter])
+  }, [assignments, byAssignment, filter, reviseIds])
 
   const reviewMeta = useMemo(() => {
     if (!reviewId) return undefined
@@ -188,7 +213,14 @@ export function StudentAssignmentsPage() {
           className={filter === 'sent' ? 'is-active' : ''}
           onClick={() => setFilter('sent')}
         >
-          На проверке <span>{submittedCount - gradedCount}</span>
+          На проверке <span>{sentCount}</span>
+        </button>
+        <button
+          type="button"
+          className={filter === 'revise' ? 'is-active filter-tab--revise' : 'filter-tab--revise'}
+          onClick={() => setFilter('revise')}
+        >
+          <MessageSquareWarning size={14} /> Переделать <span>{reviseCount}</span>
         </button>
         <button
           type="button"
@@ -208,8 +240,17 @@ export function StudentAssignmentsPage() {
           {filtered.map((assignment) => {
             const submission = byAssignment.get(assignment.id)
             const graded = submission?.grade != null
+            const hasRemarks = reviseIds.has(assignment.id)
             const overdue = !submission && isOverdue(assignment.due_at)
-            const status = graded ? 'graded' : submission ? 'sent' : overdue ? 'overdue' : 'todo'
+            const status = graded
+              ? 'graded'
+              : hasRemarks
+                ? 'revise'
+                : submission
+                  ? 'sent'
+                  : overdue
+                    ? 'overdue'
+                    : 'todo'
             return (
               <article className={`assignment-card assignment-card--${status}`} key={assignment.id}>
                 <header className="assignment-card__head">
@@ -217,6 +258,10 @@ export function StudentAssignmentsPage() {
                     {graded ? (
                       <>
                         <Star size={13} /> Оценено
+                      </>
+                    ) : hasRemarks ? (
+                      <>
+                        <MessageSquareWarning size={13} /> Переделать
                       </>
                     ) : submission ? (
                       <>
@@ -299,14 +344,14 @@ export function StudentAssignmentsPage() {
                       {submission.grade == null ? (
                         <button
                           type="button"
-                          className="btn btn--ghost btn--sm"
+                          className={`btn ${hasRemarks ? 'btn--revise' : 'btn--ghost'} btn--sm`}
                           onClick={() => {
                             setEditingSubmission(submission)
                             setSubmitAssignment(assignment)
                           }}
                           data-testid={`replace-${assignment.id}`}
                         >
-                          <Replace size={15} /> Заменить файл
+                          <Replace size={15} /> {hasRemarks ? 'Переделать' : 'Заменить файл'}
                         </button>
                       ) : null}
                     </>
@@ -323,9 +368,9 @@ export function StudentAssignmentsPage() {
                       <FileUp size={15} /> {overdue ? 'Срочно сдать!' : 'Сдать работу'}
                     </button>
                   )}
-                  {submission ? (
-                    <span className="assignment-card__marks">
-                      <MessageSquareWarning size={14} /> замечания — внутри работы
+                  {hasRemarks ? (
+                    <span className="assignment-card__marks assignment-card__marks--revise">
+                      <MessageSquareWarning size={14} /> есть замечания — загрузите новую версию
                     </span>
                   ) : null}
                 </footer>
@@ -335,7 +380,15 @@ export function StudentAssignmentsPage() {
         </div>
       ) : (
         <EmptyState
-          icon={filter === 'graded' ? <CheckCircle2 size={30} /> : <BookOpenCheck size={30} />}
+          icon={
+            filter === 'graded' ? (
+              <CheckCircle2 size={30} />
+            ) : filter === 'revise' ? (
+              <MessageSquareWarning size={30} />
+            ) : (
+              <BookOpenCheck size={30} />
+            )
+          }
           title={
             filter === 'graded'
               ? 'Оценок пока нет'
@@ -343,12 +396,16 @@ export function StudentAssignmentsPage() {
                 ? 'Всё сдано!'
                 : filter === 'sent'
                   ? 'Нет работ на проверке'
-                  : 'Заданий пока нет'
+                  : filter === 'revise'
+                    ? 'Нет работ на доработку'
+                    : 'Заданий пока нет'
           }
           text={
             filter === 'todo'
               ? 'У вас не осталось несданных работ. Преподаватель увидит все загрузки в журнале.'
-              : 'Новые задания появятся здесь, как только преподаватель их добавит.'
+              : filter === 'revise'
+                ? 'Активных замечаний нет. Если преподаватель оставит замечание, задание появится здесь.'
+                : 'Новые задания появятся здесь, как только преподаватель их добавит.'
           }
           action={
             <Link to="/journal" className="btn btn--secondary btn--sm">

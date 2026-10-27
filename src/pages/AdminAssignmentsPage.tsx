@@ -7,6 +7,7 @@ import {
   FileX,
   Filter,
   FolderOpen,
+  MessageSquareWarning,
   RefreshCw,
   Search,
 } from 'lucide-react'
@@ -23,6 +24,8 @@ import { formatDateTime, formatSize, plural } from '../lib/format'
 import { isOverdue } from '../lib/grades'
 import type { Assignment, Profile, WorkRow } from '../lib/types'
 
+type WorkStatusFilter = 'all' | 'sent' | 'revise' | 'graded'
+
 export function AdminAssignmentsPage() {
   const toast = useToast()
   const { profile } = useAuth()
@@ -34,6 +37,8 @@ export function AdminAssignmentsPage() {
   const [error, setError] = useState('')
   const [assignmentFilter, setAssignmentFilter] = useState('')
   const [studentFilter, setStudentFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState<WorkStatusFilter>('all')
+  const [reviseSubmissionIds, setReviseSubmissionIds] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
   const [review, setReview] = useState<WorkRow | null>(null)
@@ -52,14 +57,27 @@ export function AdminAssignmentsPage() {
       // Файлы оценённых работ удаляются сразу после подтверждения проверки.
       // Повторная уборка при открытии раздела удаляет остатки старых версий.
       await backend.submissions.cleanupReviewedFiles().catch(() => undefined)
-      const [assignmentList, studentList, workRows] = await Promise.all([
+      const [assignmentList, studentList, workRows, journal] = await Promise.all([
         backend.assignments.list(active.id),
         backend.students(active.group_name),
         backend.submissions.list(active.id),
+        backend.journal(active.id),
       ])
       setAssignments(assignmentList)
       setStudents(studentList)
       setRows(workRows)
+      setReviseSubmissionIds(
+        new Set(
+          journal.entries
+            .filter(
+              (entry) =>
+                entry.submission_id &&
+                entry.grade == null &&
+                entry.annotation_count > 0,
+            )
+            .map((entry) => entry.submission_id as string),
+        ),
+      )
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -74,6 +92,7 @@ export function AdminAssignmentsPage() {
   useEffect(() => {
     setAssignmentFilter('')
     setStudentFilter('')
+    setStatusFilter('all')
     setSearch('')
   }, [active?.id])
 
@@ -82,6 +101,10 @@ export function AdminAssignmentsPage() {
     return rows.filter((row) => {
       if (assignmentFilter && row.assignment.id !== assignmentFilter) return false
       if (studentFilter && row.student.id !== studentFilter) return false
+      const hasRemarks = reviseSubmissionIds.has(row.submission.id)
+      if (statusFilter === 'sent' && (row.submission.grade != null || hasRemarks)) return false
+      if (statusFilter === 'revise' && !hasRemarks) return false
+      if (statusFilter === 'graded' && row.submission.grade == null) return false
       if (query) {
         const haystack = `${row.student.full_name} ${row.assignment.title} ${
           row.submission.original_name ?? ''
@@ -90,7 +113,13 @@ export function AdminAssignmentsPage() {
       }
       return true
     })
-  }, [rows, assignmentFilter, studentFilter, search])
+  }, [rows, assignmentFilter, studentFilter, statusFilter, reviseSubmissionIds, search])
+
+  const sentCount = rows.filter(
+    (row) => row.submission.grade == null && !reviseSubmissionIds.has(row.submission.id),
+  ).length
+  const gradedCount = rows.filter((row) => row.submission.grade != null).length
+  const reviseCount = rows.filter((row) => reviseSubmissionIds.has(row.submission.id)).length
 
   const reviewMeta =
     review && active
@@ -140,7 +169,7 @@ export function AdminAssignmentsPage() {
               <span>{plural(rows.length, ['работа', 'работы', 'работ'])}</span>
             </div>
             <div>
-              <strong>{rows.filter((row) => row.submission.grade != null).length}</strong>
+              <strong>{gradedCount}</strong>
               <span>оценено</span>
             </div>
             <div>
@@ -151,6 +180,39 @@ export function AdminAssignmentsPage() {
               <strong>{students.length}</strong>
               <span>{plural(students.length, ['студент', 'студента', 'студентов'])}</span>
             </div>
+          </div>
+
+          <div className="filter-tabs" role="tablist" aria-label="Статус работ">
+            <button
+              type="button"
+              className={statusFilter === 'all' ? 'is-active' : ''}
+              onClick={() => setStatusFilter('all')}
+            >
+              Все <span>{rows.length}</span>
+            </button>
+            <button
+              type="button"
+              className={statusFilter === 'sent' ? 'is-active' : ''}
+              onClick={() => setStatusFilter('sent')}
+            >
+              На проверке <span>{sentCount}</span>
+            </button>
+            <button
+              type="button"
+              className={
+                statusFilter === 'revise' ? 'is-active filter-tab--revise' : 'filter-tab--revise'
+              }
+              onClick={() => setStatusFilter('revise')}
+            >
+              <MessageSquareWarning size={14} /> Переделать <span>{reviseCount}</span>
+            </button>
+            <button
+              type="button"
+              className={statusFilter === 'graded' ? 'is-active' : ''}
+              onClick={() => setStatusFilter('graded')}
+            >
+              Оценено <span>{gradedCount}</span>
+            </button>
           </div>
 
           <div className="works-filter">
@@ -277,6 +339,10 @@ export function AdminAssignmentsPage() {
                             type={row.assignment.grade_type}
                             size={14}
                           />
+                        ) : reviseSubmissionIds.has(row.submission.id) ? (
+                          <span className="status-pill status-pill--revise">
+                            <MessageSquareWarning size={13} /> Переделать
+                          </span>
                         ) : (
                           <span className="status-pill status-pill--sent">
                             <Clock3 size={13} /> На проверке
@@ -302,14 +368,28 @@ export function AdminAssignmentsPage() {
             </div>
           ) : (
             <EmptyState
-              icon={<BookOpenCheck size={30} />}
-              title={rows.length ? 'Ничего не найдено' : 'Работ пока нет'}
+              icon={
+                statusFilter === 'revise' ? (
+                  <MessageSquareWarning size={30} />
+                ) : (
+                  <BookOpenCheck size={30} />
+                )
+              }
+              title={
+                statusFilter === 'revise'
+                  ? 'Нет работ на доработку'
+                  : rows.length
+                    ? 'Ничего не найдено'
+                    : 'Работ пока нет'
+              }
               text={
-                rows.length
-                  ? 'Измените фильтр или поисковый запрос.'
-                  : students.length
-                    ? 'Студенты группы ещё не загрузили работы. Как только сдадут — они появятся здесь.'
-                    : 'В группе пока нет студентов. Они появятся после регистрации с выбором этой группы.'
+                statusFilter === 'revise'
+                  ? 'Активных замечаний нет. Работа появится здесь, когда вы оставите замечание.'
+                  : rows.length
+                    ? 'Измените фильтр или поисковый запрос.'
+                    : students.length
+                      ? 'Студенты группы ещё не загрузили работы. Как только сдадут — они появятся здесь.'
+                      : 'В группе пока нет студентов. Они появятся после регистрации с выбором этой группы.'
               }
               action={
                 rows.length ? (
@@ -319,6 +399,7 @@ export function AdminAssignmentsPage() {
                     onClick={() => {
                       setAssignmentFilter('')
                       setStudentFilter('')
+                      setStatusFilter('all')
                       setSearch('')
                     }}
                   >
