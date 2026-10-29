@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
 import {
-  ArrowRight,
   GraduationCap,
   Loader2,
   Pencil,
@@ -290,12 +288,6 @@ export function AdminGroupsPage() {
                     <Users size={14} /> Студенты ({students.length})
                   </button>
                 ) : null}
-                <Link to="/admin/journal" className="text-btn">
-                  Перейти в журнал <ArrowRight size={14} />
-                </Link>
-                <Link to="/admin/assignments" className="text-btn">
-                  Работы <ArrowRight size={14} />
-                </Link>
               </footer>
             </article>
             )
