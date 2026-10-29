@@ -2,10 +2,15 @@ import type {
   Annotation,
   Assignment,
   Discipline,
+  ExtraAssignment,
+  ExtraLeaderboardEntry,
+  ExtraSubmission,
+  ExtraWorkRow,
   Group,
   JournalData,
   NewAssignment,
   NewDiscipline,
+  NewExtraAssignment,
   Profile,
   StudentCredentials,
   Submission,
@@ -60,6 +65,8 @@ export interface Backend {
     remove: (name: string) => Promise<void>
   }
   students: (groupName: string) => Promise<Profile[]>
+  /** Полностью удаляет аккаунт студента вместе с работами и файлами. */
+  removeStudent: (studentId: string) => Promise<void>
   assignments: {
     list: (disciplineId: string) => Promise<Assignment[]>
     create: (input: NewAssignment) => Promise<Assignment>
@@ -89,6 +96,29 @@ export interface Backend {
     list: (submissionId: string) => Promise<Annotation[]>
     create: (input: AnnotationInput) => Promise<Annotation>
     remove: (id: string) => Promise<void>
+  }
+  extra: {
+    list: () => Promise<ExtraAssignment[]>
+    create: (input: NewExtraAssignment) => Promise<ExtraAssignment>
+    update: (id: string, input: NewExtraAssignment) => Promise<ExtraAssignment>
+    remove: (id: string) => Promise<void>
+    /** Работы студента по доп. заданиям. */
+    mine: () => Promise<ExtraSubmission[]>
+    /** Все сдачи по доп. заданиям — только преподаватель. */
+    works: (assignmentId?: string) => Promise<ExtraWorkRow[]>
+    upload: (
+      assignmentId: string,
+      file: File,
+      onProgress?: UploadProgress,
+    ) => Promise<ExtraSubmission>
+    removeSubmission: (submissionId: string) => Promise<void>
+    setGrade: (submissionId: string, grade: number | null) => Promise<ExtraSubmission>
+    leaderboard: () => Promise<ExtraLeaderboardEntry[]>
+  }
+  extraFiles: {
+    blob: (path: string) => Promise<Blob>
+    url: (path: string) => Promise<string>
+    download: (path: string, name: string) => Promise<void>
   }
   testData: {
     /** Добавляет 30 тестовых студентов и 50 заданий в выбранную дисциплину. */

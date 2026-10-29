@@ -162,6 +162,53 @@ export interface WorkRow {
   student: Pick<Profile, 'id' | 'full_name' | 'group_name'>
 }
 
+/** Общее дополнительное задание: не привязано к дисциплине и видно всем группам. */
+export interface ExtraAssignment {
+  id: string
+  title: string
+  description: string
+  due_at: string | null
+  created_by: string | null
+  created_at: string
+}
+
+export interface NewExtraAssignment {
+  title: string
+  description: string
+  due_at: string | null
+}
+
+export type ExtraSubmissionStatus = 'submitted' | 'reviewed'
+
+export interface ExtraSubmission {
+  id: string
+  assignment_id: string
+  student_id: string
+  file_path: string | null
+  original_name: string | null
+  mime: string | null
+  size: number | null
+  submitted_at: string
+  grade: number | null
+  status: ExtraSubmissionStatus
+  reviewed_at: string | null
+  updated_at: string
+}
+
+export interface ExtraWorkRow {
+  submission: ExtraSubmission
+  assignment: ExtraAssignment
+  student: Pick<Profile, 'id' | 'full_name' | 'group_name'>
+}
+
+export interface ExtraLeaderboardEntry {
+  student_id: string
+  full_name: string
+  group_name: string | null
+  total_points: number
+  graded_count: number
+}
+
 export type UploadProgress = (percent: number) => void
 
 export interface FileWithMeta {

@@ -2,10 +2,15 @@ import type {
   Annotation,
   Assignment,
   Discipline,
+  ExtraAssignment,
+  ExtraLeaderboardEntry,
+  ExtraSubmission,
+  ExtraWorkRow,
   Group,
   JournalData,
   NewAssignment,
   NewDiscipline,
+  NewExtraAssignment,
   Profile,
   StudentCredentials,
   Submission,
@@ -30,11 +35,12 @@ import {
   resetDb,
   saveDb,
 } from './demoDb'
-import { extensionOf, fileKind, safeMime, sanitizeFileName } from '../fileTypes'
+import { extensionOf, fileKind, safeMime, sanitizeFileName, validateFile } from '../fileTypes'
 import { validateGrade } from '../grades'
 import { normalizeTeacherProfile, validateTeacherProfile } from '../profile'
 import { buildTestAssignments, TEST_STUDENTS } from '../testData'
 import { readFileAsDataUrl } from '../avatar'
+import { uploadLimitBytes } from '../supabase'
 
 const listeners = new Set<(profile: Profile | null) => void>()
 
@@ -274,6 +280,109 @@ function rowFor(submission: Submission, db: ReturnType<typeof loadDb>): WorkRow 
     assignment,
     student: { id: student.id, full_name: student.full_name, group_name: student.group_name },
   }
+}
+
+function findExtraAssignment(
+  db: ReturnType<typeof loadDb>,
+  id: string,
+): ExtraAssignment | null {
+  return db.extraAssignments.find((assignment) => assignment.id === id) ?? null
+}
+
+function extraRowFor(
+  submission: ExtraSubmission,
+  db: ReturnType<typeof loadDb>,
+): ExtraWorkRow | null {
+  const assignment = findExtraAssignment(db, submission.assignment_id)
+  const student = db.users.find((u) => u.profile.id === submission.student_id)?.profile
+  if (!assignment || !student) return null
+  return {
+    submission,
+    assignment,
+    student: { id: student.id, full_name: student.full_name, group_name: student.group_name },
+  }
+}
+
+function canManageExtraSubmission(profile: Profile, submission: ExtraSubmission): boolean {
+  return profile.role === 'admin' || submission.student_id === profile.id
+}
+
+async function removeExtraAssignmentData(
+  db: ReturnType<typeof loadDb>,
+  assignmentId: string,
+): Promise<void> {
+  const submissions = db.extraSubmissions.filter(
+    (submission) => submission.assignment_id === assignmentId,
+  )
+  for (const submission of submissions) {
+    if (submission.file_path) await deleteDemoFile(submission.file_path)
+  }
+  db.extraSubmissions = db.extraSubmissions.filter(
+    (submission) => submission.assignment_id !== assignmentId,
+  )
+  db.extraAssignments = db.extraAssignments.filter(
+    (assignment) => assignment.id !== assignmentId,
+  )
+}
+
+async function removeStudentData(
+  db: ReturnType<typeof loadDb>,
+  studentId: string,
+): Promise<void> {
+  const submissions = db.submissions.filter((submission) => submission.student_id === studentId)
+  for (const submission of submissions) {
+    if (submission.file_path) await deleteDemoFile(submission.file_path)
+  }
+  const submissionIds = new Set(submissions.map((submission) => submission.id))
+  for (const version of db.versions.filter((item) => submissionIds.has(item.submission_id))) {
+    if (version.file_path) await deleteDemoFile(version.file_path)
+  }
+
+  const extraSubmissions = db.extraSubmissions.filter(
+    (submission) => submission.student_id === studentId,
+  )
+  for (const submission of extraSubmissions) {
+    if (submission.file_path) await deleteDemoFile(submission.file_path)
+  }
+
+  db.submissions = db.submissions.filter((submission) => submission.student_id !== studentId)
+  db.versions = db.versions.filter((version) => !submissionIds.has(version.submission_id))
+  db.annotations = db.annotations.filter(
+    (annotation) => !submissionIds.has(annotation.submission_id),
+  )
+  db.extraSubmissions = db.extraSubmissions.filter(
+    (submission) => submission.student_id !== studentId,
+  )
+  const target = db.users.find((user) => user.profile.id === studentId)
+  db.users = db.users.filter((user) => user.profile.id !== studentId)
+  if (target && db.sessionLogin === target.login) db.sessionLogin = null
+}
+
+function buildExtraLeaderboard(db: ReturnType<typeof loadDb>): ExtraLeaderboardEntry[] {
+  const byStudent = new Map<string, ExtraLeaderboardEntry>()
+  for (const submission of db.extraSubmissions) {
+    if (submission.grade == null) continue
+    const student = db.users.find((user) => user.profile.id === submission.student_id)?.profile
+    if (!student || student.role !== 'student' || !student.group_name) continue
+    const current = byStudent.get(student.id) ?? {
+      student_id: student.id,
+      full_name: student.full_name,
+      group_name: student.group_name,
+      total_points: 0,
+      graded_count: 0,
+    }
+    current.total_points += submission.grade
+    current.graded_count += 1
+    byStudent.set(student.id, current)
+  }
+  return [...byStudent.values()]
+    .sort(
+      (a, b) =>
+        b.total_points - a.total_points ||
+        b.graded_count - a.graded_count ||
+        a.full_name.localeCompare(b.full_name, 'ru'),
+    )
+    .slice(0, 10)
 }
 
 export const demoBackend: Backend = {
@@ -572,6 +681,18 @@ export const demoBackend: Backend = {
       .users.filter((u) => u.profile.role === 'student' && u.profile.group_name === groupName)
       .map((u) => coerceProfile(u.profile))
       .sort((a, b) => a.full_name.localeCompare(b.full_name, 'ru'))
+  },
+
+  async removeStudent(studentId: string) {
+    requireAdmin()
+    const db = loadDb()
+    const user = db.users.find((item) => item.profile.id === studentId)
+    if (!user) throw new Error('Студент не найден')
+    if (user.profile.role !== 'student') {
+      throw new Error('Удалять можно только студентов')
+    }
+    await removeStudentData(db, studentId)
+    saveDb()
   },
 
   assignments: {
@@ -1026,6 +1147,190 @@ export const demoBackend: Backend = {
       }
       db.annotations = db.annotations.filter((item) => item.id !== id)
       saveDb()
+    },
+  },
+
+  extra: {
+    async list() {
+      requireSession()
+      return [...loadDb().extraAssignments].sort((a, b) =>
+        b.created_at.localeCompare(a.created_at),
+      )
+    },
+    async create(input: NewExtraAssignment) {
+      const admin = requireAdmin()
+      const title = input.title.trim()
+      if (!title || title.length > 200) {
+        throw new Error('Название доп. задания должно быть длиной от 1 до 200 символов')
+      }
+      const db = loadDb()
+      const assignment: ExtraAssignment = {
+        id: demoId(),
+        title,
+        description: input.description.trim(),
+        due_at: input.due_at,
+        created_by: admin.id,
+        created_at: new Date().toISOString(),
+      }
+      db.extraAssignments.push(assignment)
+      saveDb()
+      return { ...assignment }
+    },
+    async update(id: string, input: NewExtraAssignment) {
+      requireAdmin()
+      const db = loadDb()
+      const assignment = findExtraAssignment(db, id)
+      if (!assignment) throw new Error('Доп. задание не найдено')
+      const title = input.title.trim()
+      if (!title || title.length > 200) {
+        throw new Error('Название доп. задания должно быть длиной от 1 до 200 символов')
+      }
+      assignment.title = title
+      assignment.description = input.description.trim()
+      assignment.due_at = input.due_at
+      saveDb()
+      return { ...assignment }
+    },
+    async remove(id: string) {
+      requireAdmin()
+      const db = loadDb()
+      if (!findExtraAssignment(db, id)) throw new Error('Доп. задание не найдено')
+      await removeExtraAssignmentData(db, id)
+      saveDb()
+    },
+    async mine() {
+      const student = requireStudent()
+      return loadDb().extraSubmissions
+        .filter((submission) => submission.student_id === student.id)
+        .sort((a, b) => b.submitted_at.localeCompare(a.submitted_at))
+        .map((submission) => ({ ...submission }))
+    },
+    async works(assignmentId?: string) {
+      requireAdmin()
+      const db = loadDb()
+      return db.extraSubmissions
+        .filter((submission) => !assignmentId || submission.assignment_id === assignmentId)
+        .sort((a, b) => b.submitted_at.localeCompare(a.submitted_at))
+        .map((submission) => extraRowFor(submission, db))
+        .filter((row): row is ExtraWorkRow => row !== null)
+    },
+    async upload(assignmentId: string, file: File, onProgress?: UploadProgress) {
+      const student = requireStudent()
+      const validation = validateFile(file, uploadLimitBytes)
+      if (validation) throw new Error(validation)
+      const db = loadDb()
+      const assignment = findExtraAssignment(db, assignmentId)
+      if (!assignment) throw new Error('Доп. задание не найдено')
+      const existing =
+        db.extraSubmissions.find(
+          (submission) =>
+            submission.assignment_id === assignmentId && submission.student_id === student.id,
+        ) ?? null
+      if (existing?.grade != null) {
+        throw new Error('Работа уже оценена — заменить файл больше нельзя')
+      }
+      const ext = extensionOf(file.name)
+      if (!ext) throw new Error('У файла нет расширения')
+      const path = `${student.id}/${assignmentId}/${demoId()}.${ext}`
+      const mime = safeMime(file)
+      const timestamp = new Date().toISOString()
+      await putDemoFile(path, file)
+      await simulateProgress(onProgress)
+      onProgress?.(100)
+
+      let submission: ExtraSubmission
+      if (existing) {
+        const oldPath = existing.file_path
+        existing.file_path = path
+        existing.original_name = sanitizeFileName(file.name)
+        existing.mime = mime
+        existing.size = file.size
+        existing.submitted_at = timestamp
+        existing.grade = null
+        existing.status = 'submitted'
+        existing.reviewed_at = null
+        existing.updated_at = timestamp
+        submission = existing
+        if (oldPath) await deleteDemoFile(oldPath)
+      } else {
+        submission = {
+          id: demoId(),
+          assignment_id: assignmentId,
+          student_id: student.id,
+          file_path: path,
+          original_name: sanitizeFileName(file.name),
+          mime,
+          size: file.size,
+          submitted_at: timestamp,
+          grade: null,
+          status: 'submitted',
+          reviewed_at: null,
+          updated_at: timestamp,
+        }
+        db.extraSubmissions.push(submission)
+      }
+      saveDb()
+      return { ...submission }
+    },
+    async removeSubmission(submissionId: string) {
+      requireAdmin()
+      const db = loadDb()
+      const submission = db.extraSubmissions.find((item) => item.id === submissionId)
+      if (!submission) return
+      if (submission.file_path) await deleteDemoFile(submission.file_path)
+      db.extraSubmissions = db.extraSubmissions.filter((item) => item.id !== submissionId)
+      saveDb()
+    },
+    async setGrade(submissionId: string, grade: number | null) {
+      requireAdmin()
+      if (
+        grade != null &&
+        (!Number.isInteger(grade) || grade < 0 || grade > 100)
+      ) {
+        throw new Error('Баллы должны быть целым числом от 0 до 100')
+      }
+      const db = loadDb()
+      const submission = db.extraSubmissions.find((item) => item.id === submissionId)
+      if (!submission) throw new Error('Работа не найдена')
+      submission.grade = grade
+      submission.status = grade != null ? 'reviewed' : 'submitted'
+      submission.reviewed_at = grade != null ? new Date().toISOString() : null
+      submission.updated_at = new Date().toISOString()
+      saveDb()
+      return { ...submission }
+    },
+    async leaderboard() {
+      requireSession()
+      return buildExtraLeaderboard(loadDb())
+    },
+  },
+
+  extraFiles: {
+    async blob(path: string) {
+      const profile = requireSession()
+      const db = loadDb()
+      const submission = db.extraSubmissions.find((item) => item.file_path === path)
+      if (!submission || !canManageExtraSubmission(profile, submission)) {
+        throw new Error('Нет доступа к файлу')
+      }
+      const blob = await getDemoFile(path)
+      if (!blob) throw new Error('Файл не найден в демо-хранилище')
+      return blob
+    },
+    async url(path: string) {
+      const blob = await demoBackend.extraFiles.blob(path)
+      return URL.createObjectURL(blob)
+    },
+    async download(path: string, name: string) {
+      const blob = await demoBackend.extraFiles.blob(path)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = name
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 4000)
     },
   },
 

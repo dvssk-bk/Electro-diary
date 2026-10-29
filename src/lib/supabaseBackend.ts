@@ -1,12 +1,17 @@
-﻿import type { SupabaseClient } from '@supabase/supabase-js'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import type {
   Annotation,
   Assignment,
   Discipline,
+  ExtraAssignment,
+  ExtraLeaderboardEntry,
+  ExtraSubmission,
+  ExtraWorkRow,
   Group,
   JournalData,
   NewAssignment,
   NewDiscipline,
+  NewExtraAssignment,
   Profile,
   StudentCredentials,
   Submission,
@@ -18,8 +23,8 @@ import type {
   WorkRow,
 } from './types'
 import type { AnnotationInput, Backend, SubmissionFilters } from './backend'
-import { supabase, supabaseAnonKey, supabaseUrl } from './supabase'
-import { extensionOf, safeMime, sanitizeFileName } from './fileTypes'
+import { supabase, supabaseAnonKey, supabaseUrl, uploadLimitBytes } from './supabase'
+import { extensionOf, safeMime, sanitizeFileName, validateFile } from './fileTypes'
 import { validateGrade } from './grades'
 import { normalizeTeacherProfile, validateTeacherProfile } from './profile'
 import { buildTestAssignments, TEST_STUDENTS } from './testData'
@@ -144,6 +149,7 @@ function storagePath(path: string): string {
 }
 
 async function uploadFileToStorage(
+  bucket: 'submissions' | 'extra_submissions',
   path: string,
   file: File,
   mime: string,
@@ -155,7 +161,10 @@ async function uploadFileToStorage(
 
   await new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest()
-    xhr.open('POST', `${supabaseUrl.replace(/\/$/, '')}/storage/v1/object/submissions/${storagePath(path)}`)
+    xhr.open(
+      'POST',
+      `${supabaseUrl.replace(/\/$/, '')}/storage/v1/object/${bucket}/${storagePath(path)}`,
+    )
     xhr.setRequestHeader('Authorization', `Bearer ${token}`)
     xhr.setRequestHeader('apikey', supabaseAnonKey)
     xhr.setRequestHeader('cache-control', '3600')
@@ -187,9 +196,12 @@ async function uploadFileToStorage(
   })
 }
 
-async function removeStorageObject(path: string): Promise<void> {
+async function removeStorageObject(
+  bucket: 'submissions' | 'extra_submissions',
+  path: string,
+): Promise<void> {
   try {
-    await client().storage.from('submissions').remove([path])
+    await client().storage.from(bucket).remove([path])
   } catch {
     // Не критично: файл мог быть уже удалён.
   }
@@ -282,7 +294,7 @@ async function storeSubmission(
   const mime = safeMime(file)
   const version = (existing?.version ?? 0) + 1
 
-  await uploadFileToStorage(path, file, mime, onProgress)
+  await uploadFileToStorage('submissions', path, file, mime, onProgress)
 
   const payload = {
     file_path: path,
@@ -305,7 +317,7 @@ async function storeSubmission(
       .select('*')
       .single()
     if (error) {
-      await removeStorageObject(path)
+      await removeStorageObject('submissions', path)
       throw new Error(
         error.code === 'PGRST116' || error.code === '42501'
           ? 'Работа уже оценена или нет прав на замену файла.'
@@ -324,7 +336,7 @@ async function storeSubmission(
       .select('*')
       .single()
     if (error) {
-      await removeStorageObject(path)
+      await removeStorageObject('submissions', path)
       throw new Error(error.message)
     }
     submission = data as Submission
@@ -656,6 +668,22 @@ export const supabaseBackend: Backend = {
       .order('full_name')
     if (error) throw new Error(error.message)
     return (data ?? []) as Profile[]
+  },
+
+  async removeStudent(studentId: string) {
+    await requireAdmin()
+    const { data, error } = await client().functions.invoke('delete-student', {
+      body: { studentId },
+    })
+    if (error) {
+      let message = await edgeFunctionError(error, 'Не удалось удалить студента')
+      if (/Failed to send a request|not found|404/i.test(message)) {
+        message =
+          'Сервис удаления студентов не задеплоен. Задеплойте Edge Function «delete-student» (см. README).'
+      }
+      throw new Error(message)
+    }
+    if (data?.error) throw new Error(data.error as string)
   },
 
   assignments: {
@@ -1174,6 +1202,300 @@ export const supabaseBackend: Backend = {
       if (versionsError) throw new Error(versionsError.message)
 
       return ids.length
+    },
+  },
+
+  extra: {
+    async list() {
+      await requireProfile()
+      const { data, error } = await client()
+        .from('extra_assignments')
+        .select('*')
+        .order('created_at', { ascending: false })
+      if (error) throw new Error(error.message)
+      return (data ?? []) as ExtraAssignment[]
+    },
+    async create(input: NewExtraAssignment) {
+      const admin = await requireAdmin()
+      const title = input.title.trim()
+      if (!title || title.length > 200) {
+        throw new Error('Название доп. задания должно быть длиной от 1 до 200 символов')
+      }
+      const { data, error } = await client()
+        .from('extra_assignments')
+        .insert({
+          title,
+          description: input.description.trim(),
+          due_at: input.due_at,
+          created_by: admin.id,
+        })
+        .select('*')
+        .single()
+      if (error) throw new Error(error.message)
+      return data as ExtraAssignment
+    },
+    async update(id: string, input: NewExtraAssignment) {
+      await requireAdmin()
+      const title = input.title.trim()
+      if (!title || title.length > 200) {
+        throw new Error('Название доп. задания должно быть длиной от 1 до 200 символов')
+      }
+      const { data, error } = await client()
+        .from('extra_assignments')
+        .update({
+          title,
+          description: input.description.trim(),
+          due_at: input.due_at,
+        })
+        .eq('id', id)
+        .select('*')
+        .single()
+      if (error) throw new Error(error.message)
+      return data as ExtraAssignment
+    },
+    async remove(id: string) {
+      await requireAdmin()
+      const db = client()
+      const { data: submissions, error: submissionsError } = await db
+        .from('extra_submissions')
+        .select('file_path')
+        .eq('assignment_id', id)
+      if (submissionsError) throw new Error(submissionsError.message)
+      const paths = [
+        ...new Set(
+          ((submissions ?? []) as { file_path: string | null }[])
+            .map((submission) => submission.file_path)
+            .filter((path): path is string => Boolean(path)),
+        ),
+      ]
+      if (paths.length) {
+        const { error: storageError } = await db.storage
+          .from('extra_submissions')
+          .remove(paths)
+        if (storageError) throw new Error(storageError.message)
+      }
+      const { error } = await db.from('extra_assignments').delete().eq('id', id)
+      if (error) throw new Error(error.message)
+    },
+    async mine() {
+      const student = await requireStudent()
+      const { data, error } = await client()
+        .from('extra_submissions')
+        .select('*')
+        .eq('student_id', student.id)
+        .order('submitted_at', { ascending: false })
+      if (error) throw new Error(error.message)
+      return (data ?? []) as ExtraSubmission[]
+    },
+    async works(assignmentId?: string) {
+      await requireAdmin()
+      const db = client()
+      let query = db
+        .from('extra_submissions')
+        .select('*')
+        .order('submitted_at', { ascending: false })
+      if (assignmentId) query = query.eq('assignment_id', assignmentId)
+      const { data, error } = await query
+      if (error) throw new Error(error.message)
+      const submissions = (data ?? []) as ExtraSubmission[]
+      if (!submissions.length) return []
+
+      const assignmentIds = [...new Set(submissions.map((item) => item.assignment_id))]
+      const studentIds = [...new Set(submissions.map((item) => item.student_id))]
+      const [assignmentsResult, studentsResult] = await Promise.all([
+        db.from('extra_assignments').select('*').in('id', assignmentIds),
+        db
+          .from('profiles')
+          .select('id, full_name, group_name, role')
+          .in('id', studentIds)
+          .eq('role', 'student'),
+      ])
+      if (assignmentsResult.error) throw new Error(assignmentsResult.error.message)
+      if (studentsResult.error) throw new Error(studentsResult.error.message)
+      const assignmentById = new Map(
+        ((assignmentsResult.data ?? []) as ExtraAssignment[]).map((item) => [item.id, item]),
+      )
+      const studentById = new Map(
+        ((studentsResult.data ?? []) as Profile[]).map((item) => [item.id, item]),
+      )
+
+      return submissions
+        .map((submission) => {
+          const assignment = assignmentById.get(submission.assignment_id)
+          const student = studentById.get(submission.student_id)
+          if (!assignment || !student) return null
+          return {
+            submission,
+            assignment,
+            student: {
+              id: student.id,
+              full_name: student.full_name,
+              group_name: student.group_name,
+            },
+          } satisfies ExtraWorkRow
+        })
+        .filter((row): row is ExtraWorkRow => row !== null)
+    },
+    async upload(assignmentId: string, file: File, onProgress?: UploadProgress) {
+      const student = await requireStudent()
+      const validation = validateFile(file, uploadLimitBytes)
+      if (validation) throw new Error(validation)
+      const db = client()
+      const { data: assignment, error: assignmentError } = await db
+        .from('extra_assignments')
+        .select('id')
+        .eq('id', assignmentId)
+        .maybeSingle()
+      if (assignmentError) throw new Error(assignmentError.message)
+      if (!assignment) throw new Error('Доп. задание не найдено')
+
+      const { data: existing, error: existingError } = await db
+        .from('extra_submissions')
+        .select('*')
+        .eq('assignment_id', assignmentId)
+        .eq('student_id', student.id)
+        .maybeSingle()
+      if (existingError) throw new Error(existingError.message)
+      if ((existing as ExtraSubmission | null)?.grade != null) {
+        throw new Error('Работа уже оценена — заменить файл больше нельзя')
+      }
+
+      const ext = extensionOf(file.name)
+      if (!ext) throw new Error('У файла нет расширения')
+      const path = `${student.id}/${assignmentId}/${crypto.randomUUID()}.${ext}`
+      const mime = safeMime(file)
+      const timestamp = new Date().toISOString()
+      await uploadFileToStorage('extra_submissions', path, file, mime, onProgress)
+
+      const payload = {
+        file_path: path,
+        original_name: sanitizeFileName(file.name),
+        mime,
+        size: file.size,
+        submitted_at: timestamp,
+        grade: null,
+        status: 'submitted' as const,
+        reviewed_at: null,
+        updated_at: timestamp,
+      }
+
+      let submission: ExtraSubmission
+      if (existing) {
+        const { data, error } = await db
+          .from('extra_submissions')
+          .update(payload)
+          .eq('id', (existing as ExtraSubmission).id)
+          .select('*')
+          .single()
+        if (error) {
+          await removeStorageObject('extra_submissions', path)
+          throw new Error(error.message)
+        }
+        submission = data as ExtraSubmission
+        const oldPath = (existing as ExtraSubmission).file_path
+        if (oldPath && oldPath !== path) {
+          await removeStorageObject('extra_submissions', oldPath)
+        }
+      } else {
+        const { data, error } = await db
+          .from('extra_submissions')
+          .insert({
+            assignment_id: assignmentId,
+            student_id: student.id,
+            ...payload,
+          })
+          .select('*')
+          .single()
+        if (error) {
+          await removeStorageObject('extra_submissions', path)
+          throw new Error(error.message)
+        }
+        submission = data as ExtraSubmission
+      }
+      return submission
+    },
+    async removeSubmission(submissionId: string) {
+      await requireAdmin()
+      const db = client()
+      const { data, error } = await db
+        .from('extra_submissions')
+        .select('file_path')
+        .eq('id', submissionId)
+        .maybeSingle()
+      if (error) throw new Error(error.message)
+      const path = (data as { file_path: string | null } | null)?.file_path ?? null
+      if (path) {
+        const { error: storageError } = await db.storage
+          .from('extra_submissions')
+          .remove([path])
+        if (storageError) throw new Error(storageError.message)
+      }
+      const { error: deleteError } = await db
+        .from('extra_submissions')
+        .delete()
+        .eq('id', submissionId)
+      if (deleteError) throw new Error(deleteError.message)
+    },
+    async setGrade(submissionId: string, grade: number | null) {
+      await requireAdmin()
+      if (grade != null && (!Number.isInteger(grade) || grade < 0 || grade > 100)) {
+        throw new Error('Баллы должны быть целым числом от 0 до 100')
+      }
+      const now = new Date().toISOString()
+      const { data, error } = await client()
+        .from('extra_submissions')
+        .update({
+          grade,
+          status: grade != null ? 'reviewed' : 'submitted',
+          reviewed_at: grade != null ? now : null,
+          updated_at: now,
+        })
+        .eq('id', submissionId)
+        .select('*')
+        .single()
+      if (error) throw new Error(error.message)
+      return data as ExtraSubmission
+    },
+    async leaderboard() {
+      await requireProfile()
+      const { data, error } = await client()
+        .from('extra_leaderboard')
+        .select('student_id, full_name, group_name, total_points, graded_count')
+        .order('total_points', { ascending: false })
+        .order('graded_count', { ascending: false })
+        .order('full_name')
+        .limit(10)
+      if (error) throw new Error(error.message)
+      return (data ?? []) as ExtraLeaderboardEntry[]
+    },
+  },
+
+  extraFiles: {
+    async blob(path: string) {
+      const url = await supabaseBackend.extraFiles.url(path)
+      const response = await fetch(url)
+      if (!response.ok) throw new Error('Не удалось скачать файл из хранилища')
+      return response.blob()
+    },
+    async url(path: string) {
+      const { data, error } = await client()
+        .storage.from('extra_submissions')
+        .createSignedUrl(path, 60 * 30)
+      if (error || !data?.signedUrl) {
+        throw new Error(error?.message || 'Не удалось получить ссылку на файл')
+      }
+      return data.signedUrl
+    },
+    async download(path: string, name: string) {
+      const blob = await supabaseBackend.extraFiles.blob(path)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = name
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 4000)
     },
   },
 

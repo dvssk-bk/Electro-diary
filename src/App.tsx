@@ -6,8 +6,10 @@ import { StudentAuthPage } from './pages/StudentAuthPage'
 import { AdminLoginPage } from './pages/AdminLoginPage'
 import { StudentJournalPage } from './pages/StudentJournalPage'
 import { StudentAssignmentsPage } from './pages/StudentAssignmentsPage'
+import { StudentExtraPage } from './pages/StudentExtraPage'
 import { AdminJournalPage } from './pages/AdminJournalPage'
 import { AdminAssignmentsPage } from './pages/AdminAssignmentsPage'
+import { AdminExtraPage } from './pages/AdminExtraPage'
 import { AdminGroupsPage } from './pages/AdminGroupsPage'
 import { TeacherProfilePage } from './pages/TeacherProfilePage'
 import { Loader2 } from 'lucide-react'
@@ -71,6 +73,14 @@ export default function App() {
               </RequireRole>
             }
           />
+          <Route
+            path="/extra"
+            element={
+              <RequireRole role="student">
+                <StudentExtraPage />
+              </RequireRole>
+            }
+          />
           <Route path="/admin" element={<AdminLoginPage />} />
           <Route
             path="/admin/journal"
@@ -85,6 +95,14 @@ export default function App() {
             element={
               <RequireRole role="admin">
                 <AdminAssignmentsPage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/admin/extra"
+            element={
+              <RequireRole role="admin">
+                <AdminExtraPage />
               </RequireRole>
             }
           />

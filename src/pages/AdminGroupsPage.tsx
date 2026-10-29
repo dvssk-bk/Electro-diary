@@ -39,6 +39,10 @@ export function AdminGroupsPage() {
   const [deleteTarget, setDeleteTarget] = useState<GroupRow | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const [studentsTarget, setStudentsTarget] = useState<GroupRow | null>(null)
+  const [studentDeleteTarget, setStudentDeleteTarget] = useState<Profile | null>(null)
+  const [studentDeleteBusy, setStudentDeleteBusy] = useState(false)
+  const [studentDeleteError, setStudentDeleteError] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -127,6 +131,42 @@ export function AdminGroupsPage() {
       setDeleteError((err as Error).message)
     } finally {
       setDeleteBusy(false)
+    }
+  }
+
+  const openStudentDelete = (student: Profile) => {
+    setStudentDeleteTarget(student)
+    setStudentDeleteError('')
+  }
+
+  const removeStudent = async () => {
+    if (!studentDeleteTarget) return
+    setStudentDeleteBusy(true)
+    setStudentDeleteError('')
+    try {
+      await backend.removeStudent(studentDeleteTarget.id)
+      toast.success(`Студент ${studentDeleteTarget.full_name} удалён`)
+      const studentId = studentDeleteTarget.id
+      setRows((list) =>
+        list.map((row) => ({
+          ...row,
+          students: row.students.filter((student) => student.id !== studentId),
+        })),
+      )
+      setStudentsTarget((current) =>
+        current
+          ? {
+              ...current,
+              students: current.students.filter((student) => student.id !== studentId),
+            }
+          : null,
+      )
+      setStudentDeleteTarget(null)
+      setRefreshKey((key) => key + 1)
+    } catch (err) {
+      setStudentDeleteError((err as Error).message)
+    } finally {
+      setStudentDeleteBusy(false)
     }
   }
 
@@ -240,6 +280,16 @@ export function AdminGroupsPage() {
               )}
 
               <footer className="group-card__foot">
+                {students.length ? (
+                  <button
+                    type="button"
+                    className="text-btn"
+                    onClick={() => setStudentsTarget(row)}
+                    data-testid={`manage-students-${group.name}`}
+                  >
+                    <Users size={14} /> Студенты ({students.length})
+                  </button>
+                ) : null}
                 <Link to="/admin/journal" className="text-btn">
                   Перейти в журнал <ArrowRight size={14} />
                 </Link>
@@ -364,6 +414,95 @@ export function AdminGroupsPage() {
               >
                 {deleteBusy ? <Loader2 className="spin" size={17} /> : <Trash2 size={17} />}
                 {deleteBusy ? 'Удаляем…' : 'Удалить группу'}
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={Boolean(studentsTarget)}
+        onClose={() => setStudentsTarget(null)}
+        title={`Студенты группы ${studentsTarget?.group.name ?? ''}`}
+        subtitle="Удаление студента полностью освобождает его логин и удаляет все работы."
+        size="md"
+      >
+        {studentsTarget?.students.length ? (
+          <ul className="student-manage-list">
+            {studentsTarget.students.map((student) => (
+              <li key={student.id}>
+                <span className="avatar avatar--sm">
+                  {student.full_name
+                    .split(/\s+/)
+                    .slice(0, 2)
+                    .map((part) => part[0])
+                    .join('')}
+                </span>
+                <span className="student-manage-list__name">
+                  <strong>{student.full_name}</strong>
+                  <small>
+                    {student.group_name ? `группа ${student.group_name}` : 'без группы'} ·
+                    регистрация {formatDate(student.created_at)}
+                  </small>
+                </span>
+                <button
+                  type="button"
+                  className="icon-btn icon-btn--danger"
+                  title="Удалить студента"
+                  aria-label={`Удалить студента ${student.full_name}`}
+                  onClick={() => openStudentDelete(student)}
+                  data-testid={`delete-student-${student.id}`}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <EmptyState
+            icon={<Users size={30} />}
+            title="В группе нет студентов"
+            text="Студенты появятся здесь после самостоятельной регистрации."
+          />
+        )}
+      </Modal>
+
+      <Modal
+        open={Boolean(studentDeleteTarget)}
+        onClose={() => {
+          if (!studentDeleteBusy) setStudentDeleteTarget(null)
+        }}
+        title="Удалить студента?"
+        subtitle="Действие нельзя отменить"
+        size="sm"
+      >
+        {studentDeleteTarget ? (
+          <div className="form">
+            <p className="form-note">
+              Студент <strong>{studentDeleteTarget.full_name}</strong> будет удалён полностью:
+              аккаунт для входа, профиль, все сданные работы, файлы, замечания и сдачи
+              доп. заданий. Логин освободится — при необходимости студент сможет
+              зарегистрироваться заново.
+            </p>
+            {studentDeleteError ? <div className="error-box">{studentDeleteError}</div> : null}
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={() => setStudentDeleteTarget(null)}
+                disabled={studentDeleteBusy}
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                className="btn btn--danger"
+                onClick={() => void removeStudent()}
+                disabled={studentDeleteBusy}
+                data-testid="delete-student-confirm"
+              >
+                {studentDeleteBusy ? <Loader2 className="spin" size={17} /> : <Trash2 size={17} />}
+                {studentDeleteBusy ? 'Удаляем…' : 'Удалить студента'}
               </button>
             </div>
           </div>

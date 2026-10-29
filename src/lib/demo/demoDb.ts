@@ -2,6 +2,8 @@ import type {
   Annotation,
   Assignment,
   Discipline,
+  ExtraAssignment,
+  ExtraSubmission,
   Group,
   Profile,
   Submission,
@@ -25,6 +27,8 @@ export interface DemoDb {
   submissions: Submission[]
   versions: SubmissionVersion[]
   annotations: Annotation[]
+  extraAssignments: ExtraAssignment[]
+  extraSubmissions: ExtraSubmission[]
   sessionLogin: string | null
 }
 
@@ -52,6 +56,8 @@ export function createSeedDb(): DemoDb {
     submissions: [],
     versions: [],
     annotations: [],
+    extraAssignments: [],
+    extraSubmissions: [],
     sessionLogin: null,
   }
 }
@@ -67,6 +73,10 @@ export function loadDb(): DemoDb {
     if (raw) {
       const parsed = JSON.parse(raw) as DemoDb
       if (parsed && parsed.version === DB_VERSION) {
+        // Старые демо-базы не знают про доп. задания — добавляем пустые списки
+        // без сброса уже созданных дисциплин и работ.
+        parsed.extraAssignments ??= []
+        parsed.extraSubmissions ??= []
         cache = parsed
         return cache
       }

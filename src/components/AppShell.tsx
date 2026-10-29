@@ -8,6 +8,7 @@ import {
   LogOut,
   Repeat2,
   RotateCcw,
+  Sparkles,
   UserRound,
   Users,
 } from 'lucide-react'
@@ -25,11 +26,13 @@ interface AppShellProps {
 const STUDENT_LINKS = [
   { to: '/journal', label: 'Журнал', icon: ClipboardList },
   { to: '/assignments', label: 'Задания', icon: BookOpenCheck },
+  { to: '/extra', label: 'Доп. задание', icon: Sparkles },
 ]
 
 const ADMIN_LINKS = [
   { to: '/admin/journal', label: 'Журнал', icon: ClipboardList },
   { to: '/admin/assignments', label: 'Задания', icon: BookOpenCheck },
+  { to: '/admin/extra', label: 'Доп. задание', icon: Sparkles },
   { to: '/admin/groups', label: 'Группы', icon: Users },
   { to: '/admin/profile', label: 'Профиль', icon: UserRound },
 ]
