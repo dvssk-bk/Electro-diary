@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarPlus, Check, FlaskConical, Loader2, RefreshCw, Star, X } from 'lucide-react'
+import { CalendarPlus, Check, Loader2, RefreshCw, Star, X } from 'lucide-react'
 import { AppShell } from '../components/AppShell'
 import { JournalTable } from '../components/JournalTable'
 import { AssignmentDialog } from '../components/AssignmentDialog'
@@ -48,7 +48,6 @@ export function AdminJournalPage() {
   const [cellBusy, setCellBusy] = useState(false)
   const [cellPoints, setCellPoints] = useState('')
   const [review, setReview] = useState<ReviewState | null>(null)
-  const [seeding, setSeeding] = useState(false)
 
   const load = useCallback(async () => {
     if (!active) {
@@ -182,32 +181,6 @@ export function AdminJournalPage() {
     }
   }
 
-  const seedTestData = async () => {
-    if (!active) return
-    const confirmed = window.confirm(
-      `Добавить в «${active.name}» 30 тестовых студентов и 50 заданий? В Supabase студенты будут созданы как реальные аккаунты.`,
-    )
-    if (!confirmed) return
-    setSeeding(true)
-    try {
-      const result = await backend.testData.seed(active.id)
-      const skipped = result.studentsSkipped + result.assignmentsSkipped
-      const summary = `Создано студентов: ${result.studentsCreated}, заданий: ${result.assignmentsCreated}${
-        skipped ? ` · уже было: ${skipped}` : ''
-      }`
-      if (result.errors.length) {
-        toast.error(`${summary}. Ошибки: ${result.errors.slice(0, 2).join('; ')}`)
-      } else {
-        toast.success(summary)
-      }
-      setRefreshKey((value) => value + 1)
-    } catch (err) {
-      toast.error((err as Error).message)
-    } finally {
-      setSeeding(false)
-    }
-  }
-
   return (
     <AppShell role="admin">
       {disciplinesLoading ? (
@@ -233,17 +206,6 @@ export function AdminJournalPage() {
                 disabled={loading}
               >
                 <RefreshCw className={loading ? 'spin' : ''} size={16} /> Обновить
-              </button>
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm"
-                onClick={seedTestData}
-                disabled={seeding || loading}
-                title="Добавить 30 студентов и 50 заданий для проверки"
-                data-testid="seed-test-data"
-              >
-                {seeding ? <Loader2 className="spin" size={16} /> : <FlaskConical size={16} />}
-                Тест-данные
               </button>
               <button
                 type="button"
