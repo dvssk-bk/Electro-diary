@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   CheckCircle2,
-  ChevronDown,
-  ChevronUp,
   ClipboardCheck,
   Clock3,
   FolderOpen,
@@ -397,7 +395,18 @@ export function AdminExtraPage() {
                   graded: 0,
                 }
                 return (
-                  <article className="extra-admin-card" key={assignment.id}>
+                  <article
+                    className="extra-admin-card"
+                    key={assignment.id}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => {
+                      if (assignment.description) {
+                        setExpandedExtraId((current) =>
+                          current === assignment.id ? null : assignment.id,
+                        )
+                      }
+                    }}
+                  >
                     <div className="extra-admin-card__top">
                       <span className="badge badge--blue">
                         <Sparkles size={12} /> Доп. задание
@@ -416,26 +425,6 @@ export function AdminExtraPage() {
                     >
                       {assignment.description || 'Описание не добавлено.'}
                     </p>
-                    {assignment.description ? (
-                      <button
-                        type="button"
-                        className="btn btn--ghost btn--sm"
-                        onClick={() =>
-                          setExpandedExtraId((current) =>
-                            current === assignment.id ? null : assignment.id,
-                          )
-                        }
-                        aria-expanded={expandedExtraId === assignment.id}
-                        data-testid={`read-extra-assignment-${assignment.id}`}
-                      >
-                        {expandedExtraId === assignment.id ? (
-                          <ChevronUp size={15} />
-                        ) : (
-                          <ChevronDown size={15} />
-                        )}
-                        {expandedExtraId === assignment.id ? 'Скрыть' : 'Читать полное задание'}
-                      </button>
-                    ) : null}
                     <div className="extra-admin-card__meta">
                       <span>
                         <Users size={14} /> {stats.total}{' '}
@@ -445,7 +434,10 @@ export function AdminExtraPage() {
                         <CheckCircle2 size={14} /> {stats.graded} оценено
                       </span>
                     </div>
-                    <div className="extra-admin-card__actions">
+                    <div
+                      className="extra-admin-card__actions"
+                      onClick={(event) => event.stopPropagation()}
+                    >
                       <button
                         type="button"
                         className="btn btn--secondary btn--sm"
