@@ -5879,6 +5879,13 @@ svg {
   -webkit-line-clamp: 3;
 }
 
+.extra-admin-card > p.is-open {
+  display: block;
+  overflow: visible;
+  min-height: 0;
+  -webkit-line-clamp: unset;
+}
+
 .extra-admin-card__meta {
   display: flex;
   flex-wrap: wrap;

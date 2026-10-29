@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   ClipboardCheck,
   Clock3,
   FolderOpen,
@@ -261,6 +263,7 @@ export function AdminExtraPage() {
   const [deleteTarget, setDeleteTarget] = useState<ExtraAssignment | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const [expandedExtraId, setExpandedExtraId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -406,9 +409,33 @@ export function AdminExtraPage() {
                       </span>
                     </div>
                     <h3>{assignment.title}</h3>
-                    <p className={assignment.description ? '' : 'muted'}>
+                    <p
+                      className={`${assignment.description ? '' : 'muted'}${
+                        expandedExtraId === assignment.id ? ' is-open' : ''
+                      }`}
+                    >
                       {assignment.description || 'Описание не добавлено.'}
                     </p>
+                    {assignment.description ? (
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--sm"
+                        onClick={() =>
+                          setExpandedExtraId((current) =>
+                            current === assignment.id ? null : assignment.id,
+                          )
+                        }
+                        aria-expanded={expandedExtraId === assignment.id}
+                        data-testid={`read-extra-assignment-${assignment.id}`}
+                      >
+                        {expandedExtraId === assignment.id ? (
+                          <ChevronUp size={15} />
+                        ) : (
+                          <ChevronDown size={15} />
+                        )}
+                        {expandedExtraId === assignment.id ? 'Скрыть' : 'Читать полное задание'}
+                      </button>
+                    ) : null}
                     <div className="extra-admin-card__meta">
                       <span>
                         <Users size={14} /> {stats.total}{' '}
