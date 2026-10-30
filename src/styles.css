@@ -5406,6 +5406,12 @@ svg {
   gap: 16px;
 }
 
+.profile-form--password {
+  margin-top: 26px;
+  padding-top: 24px;
+  border-top: 1px solid #e7dfcf;
+}
+
 .profile-form h2,
 .profile-readonly h2 {
   margin: 3px 0 5px;

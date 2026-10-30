@@ -26,7 +26,7 @@ import type { AnnotationInput, Backend, SubmissionFilters } from './backend'
 import { supabase, supabaseAnonKey, supabaseUrl, uploadLimitBytes } from './supabase'
 import { extensionOf, safeMime, sanitizeFileName, validateFile } from './fileTypes'
 import { validateGrade } from './grades'
-import { normalizeTeacherProfile, validateTeacherProfile } from './profile'
+import { normalizeTeacherProfile, validatePassword, validateTeacherProfile } from './profile'
 import { buildTestAssignments, TEST_STUDENTS } from './testData'
 
 function client(): SupabaseClient {
@@ -395,6 +395,40 @@ export const supabaseBackend: Backend = {
     },
     async signOut() {
       await client().auth.signOut()
+    },
+    async changePassword(currentPassword, newPassword) {
+      const passwordError = validatePassword(newPassword)
+      if (passwordError) throw new Error(passwordError)
+      if (currentPassword === newPassword) {
+        throw new Error('Новый пароль должен отличаться от текущего')
+      }
+
+      const db = client()
+      const { data: userData, error: userError } = await db.auth.getUser()
+      const userId = userData.user?.id
+      const email = userData.user?.email
+      if (userError || !userId || !email) {
+        throw new Error('Сессия истекла — войдите заново')
+      }
+      const profile = await fetchProfile(userId)
+      if (profile?.role !== 'admin') {
+        throw new Error('Действие доступно только преподавателю')
+      }
+
+      const { error: verifyError } = await db.auth.signInWithPassword({
+        email,
+        password: currentPassword,
+      })
+      if (verifyError) {
+        throw new Error(
+          /invalid login credentials/i.test(verifyError.message)
+            ? 'Текущий пароль указан неверно'
+            : readableAuthError(verifyError.message),
+        )
+      }
+
+      const { error } = await db.auth.updateUser({ password: newPassword })
+      if (error) throw new Error(readableAuthError(error.message))
     },
     async register(fullName, groupName): Promise<StudentCredentials> {
       const { data, error } = await client().functions.invoke('register', {

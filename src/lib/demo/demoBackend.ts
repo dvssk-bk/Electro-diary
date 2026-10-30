@@ -37,7 +37,7 @@ import {
 } from './demoDb'
 import { extensionOf, fileKind, safeMime, sanitizeFileName, validateFile } from '../fileTypes'
 import { validateGrade } from '../grades'
-import { normalizeTeacherProfile, validateTeacherProfile } from '../profile'
+import { normalizeTeacherProfile, validatePassword, validateTeacherProfile } from '../profile'
 import { buildTestAssignments, TEST_STUDENTS } from '../testData'
 import { readFileAsDataUrl } from '../avatar'
 import { uploadLimitBytes } from '../supabase'
@@ -413,6 +413,22 @@ export const demoBackend: Backend = {
       db.sessionLogin = null
       saveDb()
       emit()
+    },
+    async changePassword(currentPassword, newPassword) {
+      const admin = requireAdmin()
+      const passwordError = validatePassword(newPassword)
+      if (passwordError) throw new Error(passwordError)
+      if (currentPassword === newPassword) {
+        throw new Error('Новый пароль должен отличаться от текущего')
+      }
+      const db = loadDb()
+      const user = db.users.find((item) => item.profile.id === admin.id)
+      if (!user) throw new Error('Аккаунт не найден')
+      if (user.password !== currentPassword) {
+        throw new Error('Текущий пароль указан неверно')
+      }
+      user.password = newPassword
+      saveDb()
     },
     async register(fullName, groupName): Promise<StudentCredentials> {
       const db = loadDb()

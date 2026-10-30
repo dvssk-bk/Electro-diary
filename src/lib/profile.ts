@@ -9,6 +9,21 @@ export const PROFILE_LIMITS = {
   bio: 1000,
 } as const
 
+export const PASSWORD_LIMITS = {
+  min: 8,
+  max: 72,
+} as const
+
+export function validatePassword(password: string): string | null {
+  if (password.length < PASSWORD_LIMITS.min) {
+    return `Пароль должен содержать минимум ${PASSWORD_LIMITS.min} символов`
+  }
+  if (password.length > PASSWORD_LIMITS.max) {
+    return `Пароль должен быть не длиннее ${PASSWORD_LIMITS.max} символов`
+  }
+  return null
+}
+
 export function normalizeTeacherProfile(input: TeacherProfileInput): TeacherProfileInput {
   return {
     contact_email: input.contact_email?.trim() || null,

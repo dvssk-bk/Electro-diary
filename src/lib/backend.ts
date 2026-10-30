@@ -44,6 +44,7 @@ export interface Backend {
     onAuthChange: (callback: (profile: Profile | null) => void) => () => void
     signIn: (login: string, password: string) => Promise<Profile>
     signOut: () => Promise<void>
+    changePassword: (currentPassword: string, newPassword: string) => Promise<void>
     register: (fullName: string, groupName: string) => Promise<StudentCredentials>
     registerTeacher: (fullName: string, password: string) => Promise<TeacherRegistration>
   }

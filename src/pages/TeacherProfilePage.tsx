@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
   Camera,
+  KeyRound,
   Loader2,
   Mail,
   Phone,
@@ -17,7 +18,7 @@ import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { backend } from '../lib/api'
 import { prepareAvatar } from '../lib/avatar'
-import { PROFILE_LIMITS, validateTeacherProfile } from '../lib/profile'
+import { PASSWORD_LIMITS, PROFILE_LIMITS, validatePassword, validateTeacherProfile } from '../lib/profile'
 import type { Profile } from '../lib/types'
 
 export function TeacherProfilePage({ self = false }: { self?: boolean }) {
@@ -36,6 +37,11 @@ export function TeacherProfilePage({ self = false }: { self?: boolean }) {
   const [saving, setSaving] = useState(false)
   const [avatarBusy, setAvatarBusy] = useState(false)
   const [formError, setFormError] = useState('')
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordSaving, setPasswordSaving] = useState(false)
+  const [passwordError, setPasswordError] = useState('')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -98,6 +104,41 @@ export function TeacherProfilePage({ self = false }: { self?: boolean }) {
       setFormError((err as Error).message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const changePassword = async (event: FormEvent) => {
+    event.preventDefault()
+    setPasswordError('')
+    if (!currentPassword) {
+      setPasswordError('Введите текущий пароль')
+      return
+    }
+    const message = validatePassword(newPassword)
+    if (message) {
+      setPasswordError(message)
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Новые пароли не совпадают')
+      return
+    }
+    if (newPassword === currentPassword) {
+      setPasswordError('Новый пароль должен отличаться от текущего')
+      return
+    }
+
+    setPasswordSaving(true)
+    try {
+      await backend.auth.changePassword(currentPassword, newPassword)
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      toast.success('Пароль изменён')
+    } catch (err) {
+      setPasswordError((err as Error).message)
+    } finally {
+      setPasswordSaving(false)
     }
   }
 
@@ -231,62 +272,127 @@ export function TeacherProfilePage({ self = false }: { self?: boolean }) {
 
           <section className="profile-panel">
             {isSelf ? (
-              <form className="profile-form" onSubmit={save}>
-                <div>
-                  <span className="eyebrow">Как вас видят студенты</span>
-                  <h2>Контактные данные</h2>
-                  <p className="muted">
-                    Почта и телефон необязательны. Описание поможет студентам понять, как с вами
-                    связаться.
-                  </p>
-                </div>
+              <>
+                <form className="profile-form" onSubmit={save}>
+                  <div>
+                    <span className="eyebrow">Как вас видят студенты</span>
+                    <h2>Контактные данные</h2>
+                    <p className="muted">
+                      Почта и телефон необязательны. Описание поможет студентам понять, как с вами
+                      связаться.
+                    </p>
+                  </div>
 
-                <div className="form-row form-row--two">
+                  <div className="form-row form-row--two">
+                    <label className="field">
+                      <span>Почта</span>
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(event) => setEmail(event.target.value)}
+                        placeholder="teacher@example.com"
+                        maxLength={PROFILE_LIMITS.email}
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Телефон</span>
+                      <input
+                        type="tel"
+                        value={phone}
+                        onChange={(event) => setPhone(event.target.value)}
+                        placeholder="+7 900 000-00-00"
+                        maxLength={PROFILE_LIMITS.phone}
+                      />
+                    </label>
+                  </div>
+
                   <label className="field">
-                    <span>Почта</span>
+                    <span>Описание</span>
+                    <textarea
+                      value={bio}
+                      onChange={(event) => setBio(event.target.value)}
+                      placeholder="Например: веду информатику, консультации по средам после 16:00."
+                      maxLength={PROFILE_LIMITS.bio}
+                      rows={6}
+                    />
+                    <small className="field__counter">
+                      {bio.length} / {PROFILE_LIMITS.bio}
+                    </small>
+                  </label>
+
+                  {formError ? <ErrorBox>{formError}</ErrorBox> : null}
+
+                  <div className="profile-form__actions">
+                    <button type="submit" className="btn btn--primary" disabled={saving}>
+                      {saving ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
+                      Сохранить профиль
+                    </button>
+                  </div>
+                </form>
+
+                <form className="profile-form profile-form--password" onSubmit={changePassword}>
+                  <div>
+                    <span className="eyebrow">Безопасность</span>
+                    <h2>Смена пароля</h2>
+                    <p className="muted">
+                      Введите текущий пароль и новый пароль. Минимум {PASSWORD_LIMITS.min}{' '}
+                      символов.
+                    </p>
+                  </div>
+
+                  <label className="field">
+                    <span>Текущий пароль</span>
                     <input
-                      type="email"
-                      value={email}
-                      onChange={(event) => setEmail(event.target.value)}
-                      placeholder="teacher@example.com"
-                      maxLength={PROFILE_LIMITS.email}
+                      type="password"
+                      value={currentPassword}
+                      onChange={(event) => setCurrentPassword(event.target.value)}
+                      autoComplete="current-password"
+                      maxLength={PASSWORD_LIMITS.max}
+                      required
                     />
                   </label>
-                  <label className="field">
-                    <span>Телефон</span>
-                    <input
-                      type="tel"
-                      value={phone}
-                      onChange={(event) => setPhone(event.target.value)}
-                      placeholder="+7 900 000-00-00"
-                      maxLength={PROFILE_LIMITS.phone}
-                    />
-                  </label>
-                </div>
 
-                <label className="field">
-                  <span>Описание</span>
-                  <textarea
-                    value={bio}
-                    onChange={(event) => setBio(event.target.value)}
-                    placeholder="Например: веду информатику, консультации по средам после 16:00."
-                    maxLength={PROFILE_LIMITS.bio}
-                    rows={6}
-                  />
-                  <small className="field__counter">
-                    {bio.length} / {PROFILE_LIMITS.bio}
-                  </small>
-                </label>
+                  <div className="form-row form-row--two">
+                    <label className="field">
+                      <span>Новый пароль</span>
+                      <input
+                        type="password"
+                        value={newPassword}
+                        onChange={(event) => setNewPassword(event.target.value)}
+                        autoComplete="new-password"
+                        minLength={PASSWORD_LIMITS.min}
+                        maxLength={PASSWORD_LIMITS.max}
+                        required
+                      />
+                    </label>
+                    <label className="field">
+                      <span>Повторите новый пароль</span>
+                      <input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(event) => setConfirmPassword(event.target.value)}
+                        autoComplete="new-password"
+                        minLength={PASSWORD_LIMITS.min}
+                        maxLength={PASSWORD_LIMITS.max}
+                        required
+                      />
+                    </label>
+                  </div>
 
-                {formError ? <ErrorBox>{formError}</ErrorBox> : null}
+                  {passwordError ? <ErrorBox>{passwordError}</ErrorBox> : null}
 
-                <div className="profile-form__actions">
-                  <button type="submit" className="btn btn--primary" disabled={saving}>
-                    {saving ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
-                    Сохранить профиль
-                  </button>
-                </div>
-              </form>
+                  <div className="profile-form__actions">
+                    <button type="submit" className="btn btn--primary" disabled={passwordSaving}>
+                      {passwordSaving ? (
+                        <Loader2 className="spin" size={16} />
+                      ) : (
+                        <KeyRound size={16} />
+                      )}
+                      Изменить пароль
+                    </button>
+                  </div>
+                </form>
+              </>
             ) : (
               <div className="profile-readonly">
                 <span className="eyebrow">О преподавателе</span>
