@@ -14,10 +14,10 @@ import type {
   NewDiscipline,
   NewExtraAssignment,
   Profile,
+  ProfileInput,
   StudentCredentials,
   Submission,
   SubmissionVersion,
-  TeacherProfileInput,
   TeacherRegistration,
   TestDataResult,
   UploadProgress,
@@ -33,7 +33,7 @@ import {
   validateFile,
 } from './fileTypes'
 import { validateGrade } from './grades'
-import { normalizeTeacherProfile, validatePassword, validateTeacherProfile } from './profile'
+import { normalizeProfile, validatePassword, validateProfile } from './profile'
 import { buildTestAssignments, TEST_STUDENTS } from './testData'
 
 function client(): SupabaseClient {
@@ -459,8 +459,8 @@ export const supabaseBackend: Backend = {
         throw new Error('Сессия истекла — войдите заново')
       }
       const profile = await fetchProfile(userId)
-      if (profile?.role !== 'admin') {
-        throw new Error('Действие доступно только преподавателю')
+      if (!profile) {
+        throw new Error('Профиль не найден. Обратитесь к преподавателю.')
       }
 
       const { error: verifyError } = await db.auth.signInWithPassword({
@@ -737,10 +737,10 @@ export const supabaseBackend: Backend = {
         bio: row.bio,
       }
     },
-    async updateMine(input: TeacherProfileInput): Promise<Profile> {
-      const admin = await requireAdmin()
-      const value = normalizeTeacherProfile(input)
-      const message = validateTeacherProfile(value)
+    async updateMine(input: ProfileInput): Promise<Profile> {
+      const user = await requireProfile()
+      const value = normalizeProfile(input)
+      const message = validateProfile(value)
       if (message) throw new Error(message)
       const { data, error } = await client()
         .from('profiles')
@@ -749,17 +749,17 @@ export const supabaseBackend: Backend = {
           phone: value.phone,
           bio: value.bio,
         })
-        .eq('id', admin.id)
+        .eq('id', user.id)
         .select(PROFILE_SELECT)
         .single()
       if (error) throw new Error(error.message)
-      return mapProfile(data as ProfileRow)
+      return { ...mapProfile(data as ProfileRow), login: user.login }
     },
     async uploadAvatar(file: File): Promise<Profile> {
-      const admin = await requireAdmin()
+      const user = await requireProfile()
       const db = client()
       const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
-      const path = `${admin.id}/${crypto.randomUUID()}.${ext}`
+      const path = `${user.id}/${crypto.randomUUID()}.${ext}`
       const { error: uploadError } = await db.storage.from('avatars').upload(path, file, {
         contentType: file.type,
         upsert: false,
@@ -769,13 +769,13 @@ export const supabaseBackend: Backend = {
       const { data: old } = await db
         .from('profiles')
         .select('avatar_path')
-        .eq('id', admin.id)
+        .eq('id', user.id)
         .maybeSingle()
 
       const { data, error } = await db
         .from('profiles')
         .update({ avatar_path: path })
-        .eq('id', admin.id)
+        .eq('id', user.id)
         .select(PROFILE_SELECT)
         .single()
       if (error) {
@@ -787,27 +787,27 @@ export const supabaseBackend: Backend = {
       if (oldPath && oldPath !== path) {
         await db.storage.from('avatars').remove([oldPath])
       }
-      return mapProfile(data as ProfileRow)
+      return { ...mapProfile(data as ProfileRow), login: user.login }
     },
     async removeAvatar(): Promise<Profile> {
-      const admin = await requireAdmin()
+      const user = await requireProfile()
       const db = client()
       const { data: old } = await db
         .from('profiles')
         .select('avatar_path')
-        .eq('id', admin.id)
+        .eq('id', user.id)
         .maybeSingle()
       const oldPath = (old as { avatar_path: string | null } | null)?.avatar_path ?? null
 
       const { data, error } = await db
         .from('profiles')
         .update({ avatar_path: null })
-        .eq('id', admin.id)
+        .eq('id', user.id)
         .select(PROFILE_SELECT)
         .single()
       if (error) throw new Error(error.message)
       if (oldPath) await db.storage.from('avatars').remove([oldPath])
-      return mapProfile(data as ProfileRow)
+      return { ...mapProfile(data as ProfileRow), login: user.login }
     },
   },
 

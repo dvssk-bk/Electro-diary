@@ -27,6 +27,7 @@ const STUDENT_LINKS = [
   { to: '/journal', label: 'Журнал', icon: ClipboardList },
   { to: '/assignments', label: 'Задания', icon: BookOpenCheck },
   { to: '/extra', label: 'Доп. задание', icon: Sparkles },
+  { to: '/profile', label: 'Профиль', icon: UserRound },
 ]
 
 const ADMIN_LINKS = [
@@ -109,13 +110,17 @@ export function AppShell({ role, children }: AppShellProps) {
                   </span>
                 </Link>
               ) : (
-                <div className="user-chip" title={profile.full_name}>
+                <Link
+                  to="/profile"
+                  className="user-chip user-chip--link"
+                  title={`${profile.full_name} · открыть профиль`}
+                >
                   <Avatar profile={profile} />
                   <span className="user-chip__text">
                     <strong>{profile.full_name}</strong>
                     <span>группа {profile.group_name}</span>
                   </span>
-                </div>
+                </Link>
               )
             ) : null}
             <button

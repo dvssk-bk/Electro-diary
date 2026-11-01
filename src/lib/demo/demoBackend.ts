@@ -13,10 +13,10 @@ import type {
   NewDiscipline,
   NewExtraAssignment,
   Profile,
+  ProfileInput,
   StudentCredentials,
   Submission,
   SubmissionVersion,
-  TeacherProfileInput,
   TeacherRegistration,
   TestDataResult,
   UploadProgress,
@@ -45,7 +45,7 @@ import {
   validateFile,
 } from '../fileTypes'
 import { validateGrade } from '../grades'
-import { normalizeTeacherProfile, validatePassword, validateTeacherProfile } from '../profile'
+import { normalizeProfile, validatePassword, validateProfile } from '../profile'
 import { buildTestAssignments, TEST_STUDENTS } from '../testData'
 import { readFileAsDataUrl } from '../avatar'
 import { uploadLimitBytes } from '../supabase'
@@ -430,14 +430,14 @@ export const demoBackend: Backend = {
       emit()
     },
     async changePassword(currentPassword, newPassword) {
-      const admin = requireAdmin()
+      const profile = requireSession()
       const passwordError = validatePassword(newPassword)
       if (passwordError) throw new Error(passwordError)
       if (currentPassword === newPassword) {
         throw new Error('Новый пароль должен отличаться от текущего')
       }
       const db = loadDb()
-      const user = db.users.find((item) => item.profile.id === admin.id)
+      const user = db.users.find((item) => item.profile.id === profile.id)
       if (!user) throw new Error('Аккаунт не найден')
       if (user.password !== currentPassword) {
         throw new Error('Текущий пароль указан неверно')
@@ -631,41 +631,41 @@ export const demoBackend: Backend = {
       )
       return user ? coerceProfile(user.profile) : null
     },
-    async updateMine(input: TeacherProfileInput) {
-      const admin = requireAdmin()
-      const value = normalizeTeacherProfile(input)
-      const message = validateTeacherProfile(value)
+    async updateMine(input: ProfileInput) {
+      const profile = requireSession()
+      const value = normalizeProfile(input)
+      const message = validateProfile(value)
       if (message) throw new Error(message)
       const db = loadDb()
-      const user = db.users.find((item) => item.profile.id === admin.id)
+      const user = db.users.find((item) => item.profile.id === profile.id)
       if (!user) throw new Error('Профиль не найден')
       user.profile.contact_email = value.contact_email
       user.profile.phone = value.phone
       user.profile.bio = value.bio
       saveDb()
       emit()
-      return coerceProfile(user.profile)
+      return { ...coerceProfile(user.profile), login: user.login }
     },
     async uploadAvatar(file: File) {
-      const admin = requireAdmin()
+      const profile = requireSession()
       const db = loadDb()
-      const user = db.users.find((item) => item.profile.id === admin.id)
+      const user = db.users.find((item) => item.profile.id === profile.id)
       if (!user) throw new Error('Профиль не найден')
       const dataUrl = await readFileAsDataUrl(file)
       user.profile.avatar_url = dataUrl
       saveDb()
       emit()
-      return coerceProfile(user.profile)
+      return { ...coerceProfile(user.profile), login: user.login }
     },
     async removeAvatar() {
-      const admin = requireAdmin()
+      const profile = requireSession()
       const db = loadDb()
-      const user = db.users.find((item) => item.profile.id === admin.id)
+      const user = db.users.find((item) => item.profile.id === profile.id)
       if (!user) throw new Error('Профиль не найден')
       user.profile.avatar_url = null
       saveDb()
       emit()
-      return coerceProfile(user.profile)
+      return { ...coerceProfile(user.profile), login: user.login }
     },
   },
 

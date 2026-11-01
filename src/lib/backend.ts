@@ -13,10 +13,10 @@ import type {
   NewDiscipline,
   NewExtraAssignment,
   Profile,
+  ProfileInput,
   StudentCredentials,
   Submission,
   SubmissionVersion,
-  TeacherProfileInput,
   TeacherRegistration,
   TestDataResult,
   UploadProgress,
@@ -56,7 +56,7 @@ export interface Backend {
   }
   profiles: {
     getTeacher: (id: string) => Promise<Profile | null>
-    updateMine: (input: TeacherProfileInput) => Promise<Profile>
+    updateMine: (input: ProfileInput) => Promise<Profile>
     uploadAvatar: (file: File) => Promise<Profile>
     removeAvatar: () => Promise<Profile>
   }

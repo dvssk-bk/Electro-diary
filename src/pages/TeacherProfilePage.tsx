@@ -18,7 +18,7 @@ import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { backend } from '../lib/api'
 import { prepareAvatar } from '../lib/avatar'
-import { PASSWORD_LIMITS, PROFILE_LIMITS, validatePassword, validateTeacherProfile } from '../lib/profile'
+import { PASSWORD_LIMITS, PROFILE_LIMITS, validatePassword, validateProfile } from '../lib/profile'
 import type { Profile } from '../lib/types'
 
 export function TeacherProfilePage({ self = false }: { self?: boolean }) {
@@ -86,7 +86,7 @@ export function TeacherProfilePage({ self = false }: { self?: boolean }) {
       phone: phone.trim() || null,
       bio: bio.trim() || null,
     }
-    const message = validateTeacherProfile(input)
+    const message = validateProfile(input)
     if (message) {
       setFormError(message)
       return

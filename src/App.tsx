@@ -7,6 +7,7 @@ import { AdminLoginPage } from './pages/AdminLoginPage'
 import { StudentJournalPage } from './pages/StudentJournalPage'
 import { StudentAssignmentsPage } from './pages/StudentAssignmentsPage'
 import { StudentExtraPage } from './pages/StudentExtraPage'
+import { StudentProfilePage } from './pages/StudentProfilePage'
 import { AdminJournalPage } from './pages/AdminJournalPage'
 import { AdminAssignmentsPage } from './pages/AdminAssignmentsPage'
 import { AdminExtraPage } from './pages/AdminExtraPage'
@@ -78,6 +79,14 @@ export default function App() {
             element={
               <RequireRole role="student">
                 <StudentExtraPage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <RequireRole role="student">
+                <StudentProfilePage />
               </RequireRole>
             }
           />

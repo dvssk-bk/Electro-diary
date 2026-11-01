@@ -15,7 +15,7 @@ export interface Profile {
   bio?: string | null
 }
 
-export interface TeacherProfileInput {
+export interface ProfileInput {
   contact_email: string | null
   phone: string | null
   bio: string | null
