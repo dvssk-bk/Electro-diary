@@ -533,46 +533,85 @@ export const supabaseBackend: Backend = {
       const list = (data ?? []) as Discipline[]
 
       const profile = await requireProfile()
-      if (profile.role !== 'student' || list.length === 0) return list
+      if (list.length === 0) return list
 
       const ids = list.map((discipline) => discipline.id)
-      const [assignmentsResult, submissionsResult] = await Promise.all([
-        client().from('assignments').select('id, discipline_id').in('discipline_id', ids),
-        client()
-          .from('submissions')
-          .select('assignment_id, grade')
-          .eq('student_id', profile.id),
-      ])
-      if (assignmentsResult.error) throw new Error(assignmentsResult.error.message)
-      if (submissionsResult.error) throw new Error(submissionsResult.error.message)
+      const assignments: { id: string; discipline_id: string | null }[] = []
+      for (const idChunk of chunk(ids, 100)) {
+        const { data: assignmentRows, error: assignmentsError } = await client()
+          .from('assignments')
+          .select('id, discipline_id')
+          .in('discipline_id', idChunk)
+        if (assignmentsError) throw new Error(assignmentsError.message)
+        assignments.push(...((assignmentRows ?? []) as typeof assignments))
+      }
 
       const stats = new Map<string, { graded: number; new: number }>()
       for (const discipline of list) stats.set(discipline.id, { graded: 0, new: 0 })
 
-      const disciplineByAssignment = new Map<string, string>()
-      const submittedIds = new Set(
-        ((submissionsResult.data ?? []) as { assignment_id: string }[]).map(
-          (submission) => submission.assignment_id,
-        ),
-      )
-      for (const assignment of (assignmentsResult.data ?? []) as {
-        id: string
-        discipline_id: string | null
-      }[]) {
-        if (!assignment.discipline_id) continue
-        const item = stats.get(assignment.discipline_id)
-        if (!item) continue
-        disciplineByAssignment.set(assignment.id, assignment.discipline_id)
-        if (!submittedIds.has(assignment.id)) item.new += 1
-      }
-      for (const submission of (submissionsResult.data ?? []) as {
-        assignment_id: string
-        grade: number | null
-      }[]) {
-        const disciplineId = disciplineByAssignment.get(submission.assignment_id)
-        if (!disciplineId || submission.grade == null) continue
-        const item = stats.get(disciplineId)
-        if (item) item.graded += 1
+      if (profile.role === 'student') {
+        const { data: submissionRows, error: submissionsError } = await client()
+          .from('submissions')
+          .select('assignment_id, grade')
+          .eq('student_id', profile.id)
+        if (submissionsError) throw new Error(submissionsError.message)
+        const submissions = (submissionRows ?? []) as {
+          assignment_id: string
+          grade: number | null
+        }[]
+
+        const disciplineByAssignment = new Map<string, string>()
+        const submittedIds = new Set(
+          submissions.map((submission) => submission.assignment_id),
+        )
+        for (const assignment of assignments) {
+          if (!assignment.discipline_id) continue
+          const item = stats.get(assignment.discipline_id)
+          if (!item) continue
+          disciplineByAssignment.set(assignment.id, assignment.discipline_id)
+          if (!submittedIds.has(assignment.id)) item.new += 1
+        }
+        for (const submission of submissions) {
+          const disciplineId = disciplineByAssignment.get(submission.assignment_id)
+          if (!disciplineId || submission.grade == null) continue
+          const item = stats.get(disciplineId)
+          if (item) item.graded += 1
+        }
+      } else {
+        const submissionsByAssignment = new Map<string, { grade: number | null }[]>()
+        for (const idChunk of chunk(
+          assignments.map((assignment) => assignment.id),
+          100,
+        )) {
+          const { data: submissionRows, error: submissionsError } = await client()
+            .from('submissions')
+            .select('assignment_id, grade')
+            .in('assignment_id', idChunk)
+          if (submissionsError) throw new Error(submissionsError.message)
+          for (const submission of (submissionRows ?? []) as {
+            assignment_id: string
+            grade: number | null
+          }[]) {
+            const bucket = submissionsByAssignment.get(submission.assignment_id) ?? []
+            bucket.push({ grade: submission.grade })
+            submissionsByAssignment.set(submission.assignment_id, bucket)
+          }
+        }
+
+        for (const assignment of assignments) {
+          if (!assignment.discipline_id) continue
+          const item = stats.get(assignment.discipline_id)
+          if (!item) continue
+          const submissions = submissionsByAssignment.get(assignment.id) ?? []
+          if (
+            submissions.length > 0 &&
+            submissions.every((submission) => submission.grade != null)
+          ) {
+            item.graded += 1
+          } else {
+            item.new += 1
+          }
+        }
       }
 
       return list.map((discipline) => ({

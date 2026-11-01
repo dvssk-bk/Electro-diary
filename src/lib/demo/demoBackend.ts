@@ -527,8 +527,9 @@ export const demoBackend: Backend = {
       const db = loadDb()
       const visible = db.disciplines.filter((discipline) => canOpenDiscipline(profile, discipline))
       const stats = new Map<string, { graded: number; new: number }>()
+      for (const discipline of visible) stats.set(discipline.id, { graded: 0, new: 0 })
+
       if (profile.role === 'student') {
-        for (const discipline of visible) stats.set(discipline.id, { graded: 0, new: 0 })
         const submittedIds = new Set(
           db.submissions
             .filter((submission) => submission.student_id === profile.id)
@@ -545,6 +546,24 @@ export const demoBackend: Backend = {
           const assignment = db.assignments.find((item) => item.id === submission.assignment_id)
           const item = assignment?.discipline_id ? stats.get(assignment.discipline_id) : null
           if (item) item.graded += 1
+        }
+      } else {
+        const submissionsByAssignment = new Map<string, Submission[]>()
+        for (const submission of db.submissions) {
+          const bucket = submissionsByAssignment.get(submission.assignment_id) ?? []
+          bucket.push(submission)
+          submissionsByAssignment.set(submission.assignment_id, bucket)
+        }
+        for (const assignment of db.assignments) {
+          if (!assignment.discipline_id) continue
+          const item = stats.get(assignment.discipline_id)
+          if (!item) continue
+          const submissions = submissionsByAssignment.get(assignment.id) ?? []
+          if (submissions.length > 0 && submissions.every((submission) => submission.grade != null)) {
+            item.graded += 1
+          } else {
+            item.new += 1
+          }
         }
       }
 

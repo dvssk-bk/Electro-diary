@@ -61,6 +61,13 @@ export function DisciplinePicker({ role }: { role: 'student' | 'admin' }) {
     }
   }, [role, initialized, loading, disciplines.length])
 
+  // Счётчики зависят от заданий и сдач, поэтому обновляем их при каждом
+  // возвращении к выбору дисциплины — без мигания основного списка.
+  useEffect(() => {
+    if (!initialized || loading) return
+    void refresh({ silent: true })
+  }, [initialized, loading, refresh])
+
   const createDiscipline = async (event: FormEvent) => {
     event.preventDefault()
     setFormError('')
@@ -151,13 +158,25 @@ export function DisciplinePicker({ role }: { role: 'student' | 'admin' }) {
                   </span>
                 </span>
                 <strong>{discipline.name}</strong>
-                {role === 'student' && discipline.stats ? (
+                {discipline.stats ? (
                   <span className="discipline-card__stats">
-                    <span>
+                    <span
+                      title={
+                        role === 'admin'
+                          ? 'Задания, все сдачи по которым проверены'
+                          : 'Задания с оценкой'
+                      }
+                    >
                       <CheckCircle2 size={13} /> Проверено заданий{' '}
                       <strong>{discipline.stats.graded}</strong>
                     </span>
-                    <span>
+                    <span
+                      title={
+                        role === 'admin'
+                          ? 'Задания, которые ещё не проверены полностью'
+                          : 'Задания без сдачи'
+                      }
+                    >
                       <CirclePlus size={13} /> Новых заданий{' '}
                       <strong>{discipline.stats.new}</strong>
                     </span>

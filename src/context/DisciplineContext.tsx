@@ -19,7 +19,7 @@ interface DisciplineContextValue {
   initialized: boolean
   error: string
   select: (id: string | null) => void
-  refresh: () => Promise<void>
+  refresh: (options?: { silent?: boolean }) => Promise<void>
 }
 
 const DisciplineContext = createContext<DisciplineContextValue | null>(null)
@@ -61,7 +61,7 @@ export function DisciplineProvider({ children }: { children: ReactNode }) {
   }, [profileId])
 
   const load = useCallback(
-    async (keepSelection: boolean) => {
+    async (keepSelection: boolean, silent = false) => {
       if (!profileId) {
         setDisciplines([])
         setActiveId(null)
@@ -69,7 +69,7 @@ export function DisciplineProvider({ children }: { children: ReactNode }) {
         setError('')
         return
       }
-      setLoading(true)
+      if (!silent) setLoading(true)
       setError('')
       try {
         const list = await backend.disciplines.list()
@@ -87,11 +87,13 @@ export function DisciplineProvider({ children }: { children: ReactNode }) {
           return null
         })
       } catch (err) {
-        setDisciplines([])
-        setActiveId(null)
+        if (!silent) {
+          setDisciplines([])
+          setActiveId(null)
+        }
         setError((err as Error).message)
       } finally {
-        setLoading(false)
+        if (!silent) setLoading(false)
         setInitialized(true)
       }
     },
@@ -119,9 +121,12 @@ export function DisciplineProvider({ children }: { children: ReactNode }) {
     [profileId],
   )
 
-  const refresh = useCallback(async () => {
-    await load(true)
-  }, [load])
+  const refresh = useCallback(
+    async (options?: { silent?: boolean }) => {
+      await load(true, options?.silent ?? false)
+    },
+    [load],
+  )
 
   const active = disciplines.find((item) => item.id === activeId) ?? null
 
