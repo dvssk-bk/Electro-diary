@@ -1,9 +1,25 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { CalendarDays, Clock3, Layers3, Loader2, Save } from 'lucide-react'
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import {
+  CalendarDays,
+  Clock3,
+  FilePlus2,
+  Layers3,
+  Loader2,
+  Paperclip,
+  Save,
+  Trash2,
+} from 'lucide-react'
 import { Modal } from './Modal'
-import type { Assignment, Discipline, GradeType, NewAssignment } from '../lib/types'
+import type {
+  Assignment,
+  AssignmentAttachment,
+  Discipline,
+  GradeType,
+  NewAssignment,
+} from '../lib/types'
 import { backend } from '../lib/api'
-import { todayISO } from '../lib/format'
+import { formatSize, todayISO } from '../lib/format'
+import { ACCEPT_ATTR, ASSIGNMENT_FILES_LIMIT, validateFile } from '../lib/fileTypes'
 import { GRADE_TYPES, toDateTimeLocal } from '../lib/grades'
 import { useToast } from '../context/ToastContext'
 
@@ -31,11 +47,20 @@ export function AssignmentDialog({
   const [dueAt, setDueAt] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [existingFiles, setExistingFiles] = useState<AssignmentAttachment[]>([])
+  const [removedFileIds, setRemovedFileIds] = useState<Set<string>>(new Set())
+  const [newFiles, setNewFiles] = useState<File[]>([])
+  const [attachmentError, setAttachmentError] = useState('')
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     if (!open) return
     setError('')
     setBusy(false)
+    setAttachmentError('')
+    setRemovedFileIds(new Set())
+    setNewFiles([])
+    setExistingFiles(assignment?.attachments ?? [])
     if (assignment) {
       setTitle(assignment.title)
       setDescription(assignment.description)
@@ -83,6 +108,20 @@ export function AssignmentDialog({
       const value = assignment
         ? await backend.assignments.update(assignment.id, payload)
         : await backend.assignments.create(payload)
+      try {
+        for (const attachmentId of removedFileIds) {
+          await backend.assignmentFiles.remove(attachmentId)
+        }
+        if (newFiles.length) {
+          await backend.assignmentFiles.upload(value.id, newFiles)
+        }
+      } catch (fileError) {
+        setError(
+          `Задание сохранено, но не удалось обновить файлы: ${(fileError as Error).message}`,
+        )
+        onSaved(value)
+        return
+      }
       toast.success(assignment ? 'Задание обновлено' : 'Задание добавлено')
       onSaved(value)
       onClose()
@@ -92,6 +131,51 @@ export function AssignmentDialog({
       setBusy(false)
     }
   }
+
+  const addFiles = (event: ChangeEvent<HTMLInputElement>) => {
+    const selected = Array.from(event.target.files ?? [])
+    event.target.value = ''
+    setAttachmentError('')
+    if (!selected.length) return
+
+    const keptTotal = existingFiles
+      .filter((file) => !removedFileIds.has(file.id))
+      .reduce((sum, file) => sum + file.size, 0)
+    const currentTotal = keptTotal + newFiles.reduce((sum, file) => sum + file.size, 0)
+    const selectedTotal = selected.reduce((sum, file) => sum + file.size, 0)
+    if (currentTotal + selectedTotal > ASSIGNMENT_FILES_LIMIT) {
+      setAttachmentError('Общий размер файлов задания не должен превышать 10 МБ')
+      return
+    }
+    for (const file of selected) {
+      const message = validateFile(file, ASSIGNMENT_FILES_LIMIT)
+      if (message) {
+        setAttachmentError(message)
+        return
+      }
+    }
+    setNewFiles((current) => [...current, ...selected])
+  }
+
+  const removeExistingFile = (id: string) => {
+    setAttachmentError('')
+    setRemovedFileIds((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const removeNewFile = (index: number) => {
+    setAttachmentError('')
+    setNewFiles((current) => current.filter((_, itemIndex) => itemIndex !== index))
+  }
+
+  const keptExistingFiles = existingFiles.filter((file) => !removedFileIds.has(file.id))
+  const totalAttachmentSize =
+    keptExistingFiles.reduce((sum, file) => sum + file.size, 0) +
+    newFiles.reduce((sum, file) => sum + file.size, 0)
 
   return (
     <Modal
@@ -138,6 +222,72 @@ export function AssignmentDialog({
             data-testid="assignment-description"
           />
         </label>
+        <div className="field assignment-files">
+          <div className="assignment-files__head">
+            <span>
+              <Paperclip size={15} /> Файлы задания
+            </span>
+            <small>
+              {formatSize(totalAttachmentSize)} из 10 МБ
+            </small>
+          </div>
+          <p className="field-hint">
+            Можно прикрепить несколько файлов. Суммарный размер — не больше 10 МБ.
+          </p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept={ACCEPT_ATTR}
+            onChange={addFiles}
+            hidden
+          />
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={busy}
+          >
+            <FilePlus2 size={15} /> Добавить файлы
+          </button>
+          {attachmentError ? <div className="error-box">{attachmentError}</div> : null}
+          {keptExistingFiles.length || newFiles.length ? (
+            <ul className="assignment-files__list">
+              {keptExistingFiles.map((file) => (
+                <li key={file.id}>
+                  <Paperclip size={14} />
+                  <span className="assignment-files__name">{file.original_name}</span>
+                  <small>{formatSize(file.size)}</small>
+                  <button
+                    type="button"
+                    className="icon-btn icon-btn--danger"
+                    onClick={() => removeExistingFile(file.id)}
+                    title="Убрать файл"
+                    aria-label={`Убрать ${file.original_name}`}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </li>
+              ))}
+              {newFiles.map((file, index) => (
+                <li key={`${file.name}-${file.lastModified}-${index}`}>
+                  <Paperclip size={14} />
+                  <span className="assignment-files__name">{file.name}</span>
+                  <small>{formatSize(file.size)}</small>
+                  <button
+                    type="button"
+                    className="icon-btn icon-btn--danger"
+                    onClick={() => removeNewFile(index)}
+                    title="Убрать файл"
+                    aria-label={`Убрать ${file.name}`}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
         <div className="form-row form-row--two">
           <label className="field">
             <span>Дата выдачи</span>

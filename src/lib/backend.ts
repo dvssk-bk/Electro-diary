@@ -1,6 +1,7 @@
 import type {
   Annotation,
   Assignment,
+  AssignmentAttachment,
   Discipline,
   ExtraAssignment,
   ExtraLeaderboardEntry,
@@ -73,6 +74,13 @@ export interface Backend {
     create: (input: NewAssignment) => Promise<Assignment>
     update: (id: string, input: NewAssignment) => Promise<Assignment>
     remove: (id: string) => Promise<void>
+  }
+  assignmentFiles: {
+    upload: (assignmentId: string, files: File[]) => Promise<AssignmentAttachment[]>
+    remove: (attachmentId: string) => Promise<void>
+    blob: (path: string) => Promise<Blob>
+    url: (path: string) => Promise<string>
+    download: (path: string, name: string) => Promise<void>
   }
   journal: (disciplineId: string) => Promise<JournalData>
   submissions: {

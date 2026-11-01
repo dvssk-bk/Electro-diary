@@ -7,6 +7,8 @@ export interface Profile {
   full_name: string
   group_name: string | null
   created_at: string
+  /** Логин текущего пользователя. Заполняется только для собственной сессии. */
+  login?: string | null
   avatar_url?: string | null
   contact_email?: string | null
   phone?: string | null
@@ -32,12 +34,30 @@ export interface Group {
   created_at: string
 }
 
+export interface DisciplineStats {
+  /** Сколько работ студента уже проверено преподавателем. */
+  graded: number
+  /** Сколько заданий ещё не сдано студентом. */
+  new: number
+}
+
 export interface Discipline {
   id: string
   name: string
   group_name: string
   teacher_id: string
   teacher_name: string
+  created_at: string
+  stats?: DisciplineStats
+}
+
+export interface AssignmentAttachment {
+  id: string
+  assignment_id: string
+  file_path: string
+  original_name: string
+  mime: string
+  size: number
   created_at: string
 }
 
@@ -53,6 +73,7 @@ export interface Assignment {
   lesson_number: number
   due_at: string | null
   created_at: string
+  attachments?: AssignmentAttachment[]
 }
 
 export type SubmissionStatus = 'submitted' | 'reviewed' | 'revoked'

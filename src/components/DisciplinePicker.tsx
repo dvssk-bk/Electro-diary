@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import {
   ArrowRight,
   BookOpenCheck,
+  CheckCircle2,
+  CirclePlus,
   Layers3,
   Loader2,
   Plus,
@@ -149,6 +151,18 @@ export function DisciplinePicker({ role }: { role: 'student' | 'admin' }) {
                   </span>
                 </span>
                 <strong>{discipline.name}</strong>
+                {role === 'student' && discipline.stats ? (
+                  <span className="discipline-card__stats">
+                    <span>
+                      <CheckCircle2 size={13} /> Проверено заданий{' '}
+                      <strong>{discipline.stats.graded}</strong>
+                    </span>
+                    <span>
+                      <CirclePlus size={13} /> Новых заданий{' '}
+                      <strong>{discipline.stats.new}</strong>
+                    </span>
+                  </span>
+                ) : null}
                 <span className="discipline-card__open">
                   Открыть <ArrowRight size={15} />
                 </span>

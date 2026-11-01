@@ -15,6 +15,7 @@ import {
   Star,
 } from 'lucide-react'
 import { AppShell } from '../components/AppShell'
+import { AssignmentAttachments } from '../components/AssignmentAttachments'
 import { DisciplinePicker } from '../components/DisciplinePicker'
 import { SubmitDialog } from '../components/SubmitDialog'
 import { ReviewDrawer } from '../components/ReviewDrawer'
@@ -293,6 +294,7 @@ export function StudentAssignmentsPage() {
                 </header>
                 <h3>{assignment.title}</h3>
                 {assignment.description ? <p>{assignment.description}</p> : null}
+                <AssignmentAttachments attachments={assignment.attachments} />
 
                 {submission ? (
                   <div

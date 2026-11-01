@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type {
   Annotation,
   Assignment,
+  AssignmentAttachment,
   Discipline,
   ExtraAssignment,
   ExtraLeaderboardEntry,
@@ -24,7 +25,13 @@ import type {
 } from './types'
 import type { AnnotationInput, Backend, SubmissionFilters } from './backend'
 import { supabase, supabaseAnonKey, supabaseUrl, uploadLimitBytes } from './supabase'
-import { extensionOf, safeMime, sanitizeFileName, validateFile } from './fileTypes'
+import {
+  ASSIGNMENT_FILES_LIMIT,
+  extensionOf,
+  safeMime,
+  sanitizeFileName,
+  validateFile,
+} from './fileTypes'
 import { validateGrade } from './grades'
 import { normalizeTeacherProfile, validatePassword, validateTeacherProfile } from './profile'
 import { buildTestAssignments, TEST_STUDENTS } from './testData'
@@ -79,6 +86,13 @@ async function fetchProfile(id: string): Promise<Profile | null> {
   return data ? mapProfile(data as ProfileRow) : null
 }
 
+function withLogin(profile: Profile, email: string | null | undefined): Profile {
+  if (!email) return profile
+  const suffix = '@diary.local'
+  if (!email.toLowerCase().endsWith(suffix)) return profile
+  return { ...profile, login: email.slice(0, -suffix.length) }
+}
+
 function chunk<T>(items: T[], size: number): T[][] {
   const result: T[][] = []
   for (let index = 0; index < items.length; index += size) {
@@ -87,12 +101,45 @@ function chunk<T>(items: T[], size: number): T[][] {
   return result
 }
 
+const ATTACHMENT_SELECT =
+  'id, assignment_id, file_path, original_name, mime, size, created_at'
+
+async function loadAssignmentAttachments(
+  assignmentIds: string[],
+): Promise<Map<string, AssignmentAttachment[]>> {
+  const result = new Map<string, AssignmentAttachment[]>()
+  for (const ids of chunk(assignmentIds, 100)) {
+    const { data, error } = await client()
+      .from('assignment_attachments')
+      .select(ATTACHMENT_SELECT)
+      .in('assignment_id', ids)
+      .order('created_at')
+    if (error) throw new Error(error.message)
+    for (const row of (data ?? []) as AssignmentAttachment[]) {
+      const list = result.get(row.assignment_id) ?? []
+      list.push(row)
+      result.set(row.assignment_id, list)
+    }
+  }
+  return result
+}
+
+function withAttachments(
+  assignments: Assignment[],
+  attachments: Map<string, AssignmentAttachment[]>,
+): Assignment[] {
+  return assignments.map((assignment) => ({
+    ...assignment,
+    attachments: attachments.get(assignment.id) ?? [],
+  }))
+}
+
 async function requireProfile(): Promise<Profile> {
   const { data, error } = await client().auth.getUser()
   if (error || !data.user) throw new Error('Нужно войти в дневник')
   const profile = await fetchProfile(data.user.id)
   if (!profile) throw new Error('Профиль не найден. Обратитесь к преподавателю.')
-  return profile
+  return withLogin(profile, data.user.email)
 }
 
 async function requireAdmin(): Promise<Profile> {
@@ -363,7 +410,8 @@ export const supabaseBackend: Backend = {
       const { data } = await client().auth.getSession()
       if (!data.session?.user) return null
       try {
-        return await fetchProfile(data.session.user.id)
+        const profile = await fetchProfile(data.session.user.id)
+        return profile ? withLogin(profile, data.session.user.email) : null
       } catch {
         return null
       }
@@ -375,7 +423,7 @@ export const supabaseBackend: Backend = {
           return
         }
         fetchProfile(session.user.id)
-          .then(callback)
+          .then((profile) => callback(profile ? withLogin(profile, session.user.email) : null))
           .catch(() => callback(null))
       })
       return () => data.subscription.unsubscribe()
@@ -391,7 +439,7 @@ export const supabaseBackend: Backend = {
         await client().auth.signOut()
         throw new Error('Профиль не найден. Обратитесь к преподавателю.')
       }
-      return profile
+      return withLogin(profile, data.user.email)
     },
     async signOut() {
       await client().auth.signOut()
@@ -482,7 +530,55 @@ export const supabaseBackend: Backend = {
         .order('group_name')
         .order('name')
       if (error) throw new Error(error.message)
-      return (data ?? []) as Discipline[]
+      const list = (data ?? []) as Discipline[]
+
+      const profile = await requireProfile()
+      if (profile.role !== 'student' || list.length === 0) return list
+
+      const ids = list.map((discipline) => discipline.id)
+      const [assignmentsResult, submissionsResult] = await Promise.all([
+        client().from('assignments').select('id, discipline_id').in('discipline_id', ids),
+        client()
+          .from('submissions')
+          .select('assignment_id, grade')
+          .eq('student_id', profile.id),
+      ])
+      if (assignmentsResult.error) throw new Error(assignmentsResult.error.message)
+      if (submissionsResult.error) throw new Error(submissionsResult.error.message)
+
+      const stats = new Map<string, { graded: number; new: number }>()
+      for (const discipline of list) stats.set(discipline.id, { graded: 0, new: 0 })
+
+      const disciplineByAssignment = new Map<string, string>()
+      const submittedIds = new Set(
+        ((submissionsResult.data ?? []) as { assignment_id: string }[]).map(
+          (submission) => submission.assignment_id,
+        ),
+      )
+      for (const assignment of (assignmentsResult.data ?? []) as {
+        id: string
+        discipline_id: string | null
+      }[]) {
+        if (!assignment.discipline_id) continue
+        const item = stats.get(assignment.discipline_id)
+        if (!item) continue
+        disciplineByAssignment.set(assignment.id, assignment.discipline_id)
+        if (!submittedIds.has(assignment.id)) item.new += 1
+      }
+      for (const submission of (submissionsResult.data ?? []) as {
+        assignment_id: string
+        grade: number | null
+      }[]) {
+        const disciplineId = disciplineByAssignment.get(submission.assignment_id)
+        if (!disciplineId || submission.grade == null) continue
+        const item = stats.get(disciplineId)
+        if (item) item.graded += 1
+      }
+
+      return list.map((discipline) => ({
+        ...discipline,
+        stats: stats.get(discipline.id) ?? { graded: 0, new: 0 },
+      }))
     },
     async create(input: NewDiscipline): Promise<Discipline> {
       const admin = await requireAdmin()
@@ -522,8 +618,18 @@ export const supabaseBackend: Backend = {
       const assignmentIds = (assignments ?? []).map((row: { id: string }) => row.id)
 
       const paths = new Set<string>()
+      const attachmentPaths = new Set<string>()
       if (assignmentIds.length) {
         for (const ids of chunk(assignmentIds, 100)) {
+          const { data: attachments, error: attachmentsError } = await db
+            .from('assignment_attachments')
+            .select('file_path')
+            .in('assignment_id', ids)
+          if (attachmentsError) throw new Error(attachmentsError.message)
+          for (const attachment of (attachments ?? []) as { file_path: string }[]) {
+            if (attachment.file_path) attachmentPaths.add(attachment.file_path)
+          }
+
           const { data: submissions, error: submissionsError } = await db
             .from('submissions')
             .select('id, file_path')
@@ -555,6 +661,13 @@ export const supabaseBackend: Backend = {
       for (const pathChunk of chunk([...paths], 100)) {
         if (!pathChunk.length) continue
         const { error: storageError } = await db.storage.from('submissions').remove(pathChunk)
+        if (storageError) throw new Error(storageError.message)
+      }
+      for (const pathChunk of chunk([...attachmentPaths], 100)) {
+        if (!pathChunk.length) continue
+        const { error: storageError } = await db
+          .storage.from('assignment_files')
+          .remove(pathChunk)
         if (storageError) throw new Error(storageError.message)
       }
 
@@ -729,7 +842,11 @@ export const supabaseBackend: Backend = {
         .order('assigned_date')
         .order('lesson_number')
       if (error) throw new Error(error.message)
-      return (data ?? []) as Assignment[]
+      const assignments = (data ?? []) as Assignment[]
+      const attachments = await loadAssignmentAttachments(
+        assignments.map((assignment) => assignment.id),
+      )
+      return withAttachments(assignments, attachments)
     },
     async create(input: NewAssignment) {
       const admin = await requireAdmin()
@@ -750,7 +867,7 @@ export const supabaseBackend: Backend = {
         .select('*')
         .single()
       if (error) throw new Error(error.message)
-      return data as Assignment
+      return { ...(data as Assignment), attachments: [] }
     },
     async update(id: string, input: NewAssignment) {
       const admin = await requireAdmin()
@@ -772,7 +889,9 @@ export const supabaseBackend: Backend = {
         .select('*')
         .single()
       if (error) throw new Error(error.message)
-      return data as Assignment
+      const assignment = data as Assignment
+      const attachments = await loadAssignmentAttachments([assignment.id])
+      return { ...assignment, attachments: attachments.get(assignment.id) ?? [] }
     },
     async remove(id: string) {
       await requireAdmin()
@@ -809,8 +928,155 @@ export const supabaseBackend: Backend = {
         if (storageError) throw new Error(storageError.message)
       }
 
+      const { data: attachments, error: attachmentsError } = await db
+        .from('assignment_attachments')
+        .select('file_path')
+        .eq('assignment_id', id)
+      if (attachmentsError) throw new Error(attachmentsError.message)
+      const attachmentPaths = (attachments ?? [])
+        .map((attachment: { file_path: string }) => attachment.file_path)
+        .filter(Boolean)
+      if (attachmentPaths.length) {
+        const { error: storageError } = await db
+          .storage.from('assignment_files')
+          .remove(attachmentPaths)
+        if (storageError) throw new Error(storageError.message)
+      }
+
       const { error } = await db.from('assignments').delete().eq('id', id)
       if (error) throw new Error(error.message)
+    },
+  },
+
+  assignmentFiles: {
+    async upload(assignmentId, files) {
+      const admin = await requireAdmin()
+      if (!files.length) return []
+      const db = client()
+      const { data: assignment, error: assignmentError } = await db
+        .from('assignments')
+        .select('id, discipline_id')
+        .eq('id', assignmentId)
+        .maybeSingle()
+      if (assignmentError) throw new Error(assignmentError.message)
+      if (!assignment?.discipline_id) throw new Error('Задание не найдено')
+      await loadOwnedDiscipline(assignment.discipline_id, admin.id)
+
+      const { data: existing, error: existingError } = await db
+        .from('assignment_attachments')
+        .select('size')
+        .eq('assignment_id', assignmentId)
+      if (existingError) throw new Error(existingError.message)
+      const existingTotal = ((existing ?? []) as { size: number }[]).reduce(
+        (sum, item) => sum + Number(item.size),
+        0,
+      )
+      const incomingTotal = files.reduce((sum, file) => sum + file.size, 0)
+      if (existingTotal + incomingTotal > ASSIGNMENT_FILES_LIMIT) {
+        throw new Error('Общий размер файлов задания не должен превышать 10 МБ')
+      }
+      for (const file of files) {
+        const message = validateFile(file, ASSIGNMENT_FILES_LIMIT)
+        if (message) throw new Error(message)
+      }
+
+      const created: AssignmentAttachment[] = []
+      const uploadedPaths: string[] = []
+      try {
+        for (const file of files) {
+          const ext = extensionOf(file.name)
+          const path = `${assignmentId}/${crypto.randomUUID()}${ext ? `.${ext}` : ''}`
+          const mime = safeMime(file)
+          const { error: uploadError } = await db.storage
+            .from('assignment_files')
+            .upload(path, file, { contentType: mime, upsert: false })
+          if (uploadError) throw new Error(uploadError.message)
+          uploadedPaths.push(path)
+
+          const { data, error: insertError } = await db
+            .from('assignment_attachments')
+            .insert({
+              assignment_id: assignmentId,
+              file_path: path,
+              original_name: sanitizeFileName(file.name),
+              mime,
+              size: file.size,
+              uploaded_by: admin.id,
+            })
+            .select(ATTACHMENT_SELECT)
+            .single()
+          if (insertError) throw new Error(insertError.message)
+          created.push(data as AssignmentAttachment)
+        }
+        return created
+      } catch (err) {
+        if (created.length) {
+          await db
+            .from('assignment_attachments')
+            .delete()
+            .in('id', created.map((item) => item.id))
+        }
+        if (uploadedPaths.length) {
+          await db.storage.from('assignment_files').remove(uploadedPaths)
+        }
+        throw err
+      }
+    },
+    async remove(attachmentId) {
+      const admin = await requireAdmin()
+      const db = client()
+      const { data: attachment, error } = await db
+        .from('assignment_attachments')
+        .select('id, assignment_id, file_path')
+        .eq('id', attachmentId)
+        .maybeSingle()
+      if (error) throw new Error(error.message)
+      if (!attachment) return
+
+      const { data: assignment, error: assignmentError } = await db
+        .from('assignments')
+        .select('discipline_id')
+        .eq('id', attachment.assignment_id)
+        .maybeSingle()
+      if (assignmentError) throw new Error(assignmentError.message)
+      if (!assignment?.discipline_id) throw new Error('Задание не найдено')
+      await loadOwnedDiscipline(assignment.discipline_id, admin.id)
+
+      const { error: storageError } = await db
+        .storage.from('assignment_files')
+        .remove([attachment.file_path])
+      if (storageError) throw new Error(storageError.message)
+      const { error: deleteError } = await db
+        .from('assignment_attachments')
+        .delete()
+        .eq('id', attachmentId)
+      if (deleteError) throw new Error(deleteError.message)
+    },
+    async blob(path) {
+      const url = await supabaseBackend.assignmentFiles.url(path)
+      const response = await fetch(url)
+      if (!response.ok) throw new Error('Не удалось скачать файл задания')
+      return response.blob()
+    },
+    async url(path) {
+      const { data, error } = await client()
+        .storage.from('assignment_files')
+        .createSignedUrl(path, 60 * 30)
+      if (error || !data?.signedUrl) {
+        throw new Error(error?.message || 'Не удалось получить ссылку на файл задания')
+      }
+      return data.signedUrl
+    },
+    async download(path, name) {
+      const blob = await supabaseBackend.assignmentFiles.blob(path)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = name
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 4000)
     },
   },
 
@@ -845,6 +1111,7 @@ export const supabaseBackend: Backend = {
 
     const assignments = (assignmentsResult.data ?? []) as Assignment[]
     const assignmentIds = assignments.map((a) => a.id)
+    const attachmentMap = await loadAssignmentAttachments(assignmentIds)
     let entries: JournalData['entries'] = []
     if (assignmentIds.length) {
       const { data, error } = await db
@@ -914,7 +1181,7 @@ export const supabaseBackend: Backend = {
     }
 
     return {
-      assignments,
+      assignments: withAttachments(assignments, attachmentMap),
       students: (studentsResult.data ?? []) as Profile[],
       entries,
     }

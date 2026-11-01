@@ -1,6 +1,7 @@
 import type {
   Annotation,
   Assignment,
+  AssignmentAttachment,
   Discipline,
   ExtraAssignment,
   ExtraLeaderboardEntry,
@@ -35,7 +36,14 @@ import {
   resetDb,
   saveDb,
 } from './demoDb'
-import { extensionOf, fileKind, safeMime, sanitizeFileName, validateFile } from '../fileTypes'
+import {
+  ASSIGNMENT_FILES_LIMIT,
+  extensionOf,
+  fileKind,
+  safeMime,
+  sanitizeFileName,
+  validateFile,
+} from '../fileTypes'
 import { validateGrade } from '../grades'
 import { normalizeTeacherProfile, validatePassword, validateTeacherProfile } from '../profile'
 import { buildTestAssignments, TEST_STUDENTS } from '../testData'
@@ -190,6 +198,13 @@ async function removeDisciplineData(
     if (version.file_path) await deleteDemoFile(version.file_path)
   }
 
+  const attachments = db.assignmentAttachments.filter((attachment) =>
+    assignmentIds.has(attachment.assignment_id),
+  )
+  for (const attachment of attachments) await deleteDemoFile(attachment.file_path)
+  db.assignmentAttachments = db.assignmentAttachments.filter(
+    (attachment) => !assignmentIds.has(attachment.assignment_id),
+  )
   db.submissions = db.submissions.filter((submission) => !submissionIds.has(submission.id))
   db.versions = db.versions.filter((version) => !submissionIds.has(version.submission_id))
   db.annotations = db.annotations.filter(
@@ -406,7 +421,7 @@ export const demoBackend: Backend = {
       db.sessionLogin = user.login
       saveDb()
       emit()
-      return coerceProfile(user.profile)
+      return { ...coerceProfile(user.profile), login: user.login }
     },
     async signOut() {
       const db = loadDb()
@@ -502,7 +517,7 @@ export const demoBackend: Backend = {
       db.users.push({ login, password, profile })
       db.sessionLogin = login
       saveDb()
-      return { profile: coerceProfile(profile), login }
+      return { profile: { ...coerceProfile(profile), login }, login }
     },
   },
 
@@ -510,9 +525,34 @@ export const demoBackend: Backend = {
     async list() {
       const profile = requireSession()
       const db = loadDb()
-      return db.disciplines
-        .filter((discipline) => canOpenDiscipline(profile, discipline))
-        .map((discipline) => ({ ...discipline }))
+      const visible = db.disciplines.filter((discipline) => canOpenDiscipline(profile, discipline))
+      const stats = new Map<string, { graded: number; new: number }>()
+      if (profile.role === 'student') {
+        for (const discipline of visible) stats.set(discipline.id, { graded: 0, new: 0 })
+        const submittedIds = new Set(
+          db.submissions
+            .filter((submission) => submission.student_id === profile.id)
+            .map((submission) => submission.assignment_id),
+        )
+        for (const assignment of db.assignments) {
+          if (!assignment.discipline_id) continue
+          const item = stats.get(assignment.discipline_id)
+          if (!item) continue
+          if (!submittedIds.has(assignment.id)) item.new += 1
+        }
+        for (const submission of db.submissions) {
+          if (submission.student_id !== profile.id || submission.grade == null) continue
+          const assignment = db.assignments.find((item) => item.id === submission.assignment_id)
+          const item = assignment?.discipline_id ? stats.get(assignment.discipline_id) : null
+          if (item) item.graded += 1
+        }
+      }
+
+      return visible
+        .map((discipline) => ({
+          ...discipline,
+          stats: stats.get(discipline.id),
+        }))
         .sort((a, b) => {
           if (a.group_name !== b.group_name) {
             return a.group_name.localeCompare(b.group_name, 'ru')
@@ -722,6 +762,12 @@ export const demoBackend: Backend = {
           if (a.assigned_date !== b.assigned_date) return a.assigned_date.localeCompare(b.assigned_date)
           return a.lesson_number - b.lesson_number
         })
+        .map((assignment) => ({
+          ...assignment,
+          attachments: db.assignmentAttachments.filter(
+            (attachment) => attachment.assignment_id === assignment.id,
+          ),
+        }))
     },
     async create(input: NewAssignment) {
       const admin = requireAdmin()
@@ -747,7 +793,7 @@ export const demoBackend: Backend = {
       if (!assignment.title) throw new Error('Введите название задания')
       db.assignments.push(assignment)
       saveDb()
-      return assignment
+      return { ...assignment, attachments: [] }
     },
     async update(id: string, input: NewAssignment) {
       const admin = requireAdmin()
@@ -783,7 +829,12 @@ export const demoBackend: Backend = {
       assignment.lesson_number = input.lesson_number
       assignment.due_at = input.due_at || null
       saveDb()
-      return { ...assignment }
+      return {
+        ...assignment,
+        attachments: db.assignmentAttachments.filter(
+          (attachment) => attachment.assignment_id === assignment.id,
+        ),
+      }
     },
     async remove(id: string) {
       const admin = requireAdmin()
@@ -804,11 +855,127 @@ export const demoBackend: Backend = {
       for (const version of db.versions.filter((v) => submissionIds.has(v.submission_id))) {
         if (version.file_path) await deleteDemoFile(version.file_path)
       }
+      const attachments = db.assignmentAttachments.filter(
+        (attachment) => attachment.assignment_id === id,
+      )
+      for (const attachment of attachments) {
+        await deleteDemoFile(attachment.file_path)
+      }
+      db.assignmentAttachments = db.assignmentAttachments.filter(
+        (attachment) => attachment.assignment_id !== id,
+      )
       db.submissions = db.submissions.filter((s) => s.assignment_id !== id)
       db.versions = db.versions.filter((v) => !submissionIds.has(v.submission_id))
       db.annotations = db.annotations.filter((a) => !submissionIds.has(a.submission_id))
       db.assignments = db.assignments.filter((a) => a.id !== id)
       saveDb()
+    },
+  },
+
+  assignmentFiles: {
+    async upload(assignmentId, files) {
+      const admin = requireAdmin()
+      if (!files.length) return []
+      const db = loadDb()
+      const assignment = db.assignments.find((item) => item.id === assignmentId)
+      const discipline = assignment?.discipline_id
+        ? findDiscipline(db, assignment.discipline_id)
+        : null
+      if (!assignment || !discipline || discipline.teacher_id !== admin.id) {
+        throw new Error('Можно прикреплять файлы только к своим заданиям')
+      }
+
+      const existingTotal = db.assignmentAttachments
+        .filter((attachment) => attachment.assignment_id === assignmentId)
+        .reduce((sum, attachment) => sum + attachment.size, 0)
+      const incomingTotal = files.reduce((sum, file) => sum + file.size, 0)
+      if (existingTotal + incomingTotal > ASSIGNMENT_FILES_LIMIT) {
+        throw new Error('Общий размер файлов задания не должен превышать 10 МБ')
+      }
+      for (const file of files) {
+        const message = validateFile(file, ASSIGNMENT_FILES_LIMIT)
+        if (message) throw new Error(message)
+      }
+
+      const created: AssignmentAttachment[] = []
+      try {
+        for (const file of files) {
+          const ext = extensionOf(file.name)
+          const path = `assignment-${assignmentId}/${demoId()}${ext ? `.${ext}` : ''}`
+          await putDemoFile(path, file)
+          const attachment: AssignmentAttachment = {
+            id: demoId(),
+            assignment_id: assignmentId,
+            file_path: path,
+            original_name: sanitizeFileName(file.name),
+            mime: safeMime(file),
+            size: file.size,
+            created_at: new Date().toISOString(),
+          }
+          db.assignmentAttachments.push(attachment)
+          created.push(attachment)
+        }
+        saveDb()
+        return created
+      } catch (err) {
+        for (const attachment of created) {
+          await deleteDemoFile(attachment.file_path)
+          db.assignmentAttachments = db.assignmentAttachments.filter(
+            (item) => item.id !== attachment.id,
+          )
+        }
+        saveDb()
+        throw err
+      }
+    },
+    async remove(attachmentId) {
+      const admin = requireAdmin()
+      const db = loadDb()
+      const attachment = db.assignmentAttachments.find((item) => item.id === attachmentId)
+      if (!attachment) return
+      const assignment = db.assignments.find((item) => item.id === attachment.assignment_id)
+      const discipline = assignment?.discipline_id
+        ? findDiscipline(db, assignment.discipline_id)
+        : null
+      if (!assignment || !discipline || discipline.teacher_id !== admin.id) {
+        throw new Error('Можно удалять файлы только у своих заданий')
+      }
+      await deleteDemoFile(attachment.file_path)
+      db.assignmentAttachments = db.assignmentAttachments.filter(
+        (item) => item.id !== attachmentId,
+      )
+      saveDb()
+    },
+    async blob(path) {
+      const profile = requireSession()
+      const db = loadDb()
+      const attachment = db.assignmentAttachments.find((item) => item.file_path === path)
+      if (!attachment) throw new Error('Файл задания не найден')
+      const assignment = db.assignments.find((item) => item.id === attachment.assignment_id)
+      const discipline = assignment?.discipline_id
+        ? findDiscipline(db, assignment.discipline_id)
+        : null
+      if (!assignment || !discipline || !canOpenDiscipline(profile, discipline)) {
+        throw new Error('Нет доступа к файлу задания')
+      }
+      const blob = await getDemoFile(path)
+      if (!blob) throw new Error('Файл не найден в демо-хранилище')
+      return blob
+    },
+    async url(path) {
+      const blob = await demoBackend.assignmentFiles.blob(path)
+      return URL.createObjectURL(blob)
+    },
+    async download(path, name) {
+      const blob = await demoBackend.assignmentFiles.blob(path)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = name
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 4000)
     },
   },
 
@@ -840,7 +1007,16 @@ export const demoBackend: Backend = {
         submitted_at: s.submitted_at,
         annotation_count: s.grade == null ? activeAnnotationCount(db, s.id) : 0,
       }))
-    return { assignments, students, entries }
+    return {
+      assignments: assignments.map((assignment) => ({
+        ...assignment,
+        attachments: db.assignmentAttachments.filter(
+          (attachment) => attachment.assignment_id === assignment.id,
+        ),
+      })),
+      students,
+      entries,
+    }
   },
 
   submissions: {

@@ -40,6 +40,9 @@ const MAP: Record<string, FileKindInfo> = {
 export const ACCEPT_EXTENSIONS = Object.keys(MAP).filter((key) => MAP[key].accept)
 export const ACCEPT_ATTR = ACCEPT_EXTENSIONS.map((ext) => `.${ext}`).join(',')
 
+/** Суммарный лимит файлов, прикреплённых преподавателем к заданию. */
+export const ASSIGNMENT_FILES_LIMIT = 10 * 1024 * 1024
+
 export function extensionOf(name: string): string {
   const dot = name.lastIndexOf('.')
   return dot >= 0 ? name.slice(dot + 1).toLowerCase() : ''

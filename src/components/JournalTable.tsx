@@ -33,11 +33,20 @@ interface JournalTableProps {
   actions?: React.ReactNode
 }
 
-function splitName(fullName: string): { surname: string; rest: string } {
+function splitName(fullName: string): {
+  surname: string
+  name: string
+  patronymic: string
+  rest: string
+} {
   const parts = fullName.trim().split(/\s+/)
-  if (parts.length === 1) return { surname: fullName, rest: '' }
+  if (parts.length === 1) {
+    return { surname: fullName, name: '', patronymic: '', rest: '' }
+  }
   return {
     surname: parts[0],
+    name: parts[1] ?? '',
+    patronymic: parts.slice(2).join(' '),
     rest: parts.slice(1).join(' '),
   }
 }
@@ -399,8 +408,10 @@ export function JournalTable({
             const stat = statsByStudent.get(student.id)
             const isOwn = student.id === currentStudentId
             const expanded = expandedStudentId === student.id
-            const { surname, rest } = splitName(student.full_name)
-            const initials = `${(rest || surname).slice(0, 1)}${rest ? surname.slice(0, 1) : ''}`.toUpperCase()
+            const { surname, name, patronymic, rest } = splitName(student.full_name)
+            const initials = `${(name || surname).slice(0, 1)}${
+              name ? surname.slice(0, 1) : ''
+            }`.toUpperCase()
             return (
               <article
                 key={student.id}
@@ -417,10 +428,10 @@ export function JournalTable({
                 >
                   <span className="journal-mobile__avatar">{initials}</span>
                   <span className="journal-mobile__who">
-                    <strong>{rest || surname}</strong>
+                    <strong>{name ? `${name} ${surname}` : surname}</strong>
                     <span>
-                      {rest ? surname : 'студент'} · {stat?.submitted ?? 0} из{' '}
-                      {data.assignments.length} сдано
+                      {patronymic ? `${patronymic} · ` : rest ? '' : 'студент · '}
+                      {stat?.submitted ?? 0} из {data.assignments.length} сдано
                     </span>
                   </span>
                   {isOwn ? <span className="journal-mobile__you">вы</span> : null}

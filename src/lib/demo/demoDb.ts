@@ -1,6 +1,7 @@
 import type {
   Annotation,
   Assignment,
+  AssignmentAttachment,
   Discipline,
   ExtraAssignment,
   ExtraSubmission,
@@ -24,6 +25,7 @@ export interface DemoDb {
   users: DemoUser[]
   disciplines: Discipline[]
   assignments: Assignment[]
+  assignmentAttachments: AssignmentAttachment[]
   submissions: Submission[]
   versions: SubmissionVersion[]
   annotations: Annotation[]
@@ -53,6 +55,7 @@ export function createSeedDb(): DemoDb {
     users: [],
     disciplines: [],
     assignments: [],
+    assignmentAttachments: [],
     submissions: [],
     versions: [],
     annotations: [],
@@ -77,6 +80,7 @@ export function loadDb(): DemoDb {
         // без сброса уже созданных дисциплин и работ.
         parsed.extraAssignments ??= []
         parsed.extraSubmissions ??= []
+        parsed.assignmentAttachments ??= []
         cache = parsed
         return cache
       }
@@ -114,7 +118,7 @@ export function getSessionProfile(): Profile | null {
   const db = loadDb()
   if (!db.sessionLogin) return null
   const user = db.users.find((u) => u.login === db.sessionLogin)
-  return user ? { ...user.profile } : null
+  return user ? { ...user.profile, login: user.login } : null
 }
 
 export function coerceProfile(value: Profile): Profile {

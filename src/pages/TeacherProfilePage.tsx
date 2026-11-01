@@ -243,6 +243,16 @@ export function TeacherProfilePage({ self = false }: { self?: boolean }) {
             ) : null}
 
             <dl className="profile-contacts">
+              {isSelf && profile?.login ? (
+                <div>
+                  <dt>
+                    <KeyRound size={14} /> Логин
+                  </dt>
+                  <dd>
+                    <code className="profile-login">{profile.login}</code>
+                  </dd>
+                </div>
+              ) : null}
               <div>
                 <dt>
                   <Mail size={14} /> Почта
