@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   GraduationCap,
   Loader2,
@@ -9,6 +10,7 @@ import {
   Users,
 } from 'lucide-react'
 import { AppShell } from '../components/AppShell'
+import { Avatar } from '../components/Avatar'
 import { Modal } from '../components/Modal'
 import { EmptyState, ErrorBox, Spinner } from '../components/Feedback'
 import { useDisciplines } from '../context/DisciplineContext'
@@ -24,6 +26,7 @@ interface GroupRow {
 
 export function AdminGroupsPage() {
   const toast = useToast()
+  const navigate = useNavigate()
   const { refresh: refreshDisciplines } = useDisciplines()
   const [rows, setRows] = useState<GroupRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -257,14 +260,16 @@ export function AdminGroupsPage() {
                 <ul className="group-students">
                   {students.slice(0, 5).map((student) => (
                     <li key={student.id}>
-                      <span className="avatar avatar--sm">
-                        {student.full_name
-                          .split(/\s+/)
-                          .slice(0, 2)
-                          .map((part) => part[0])
-                          .join('')}
-                      </span>
-                      {student.full_name}
+                      <button
+                        type="button"
+                        className="group-students__open"
+                        onClick={() => navigate(`/student/${student.id}`)}
+                        title={`Открыть профиль ${student.full_name}`}
+                        data-testid={`open-student-${student.id}`}
+                      >
+                        <Avatar profile={student} size="sm" />
+                        <span>{student.full_name}</span>
+                      </button>
                     </li>
                   ))}
                   {students.length > 5 ? (
@@ -423,20 +428,25 @@ export function AdminGroupsPage() {
           <ul className="student-manage-list">
             {studentsTarget.students.map((student) => (
               <li key={student.id}>
-                <span className="avatar avatar--sm">
-                  {student.full_name
-                    .split(/\s+/)
-                    .slice(0, 2)
-                    .map((part) => part[0])
-                    .join('')}
-                </span>
-                <span className="student-manage-list__name">
-                  <strong>{student.full_name}</strong>
-                  <small>
-                    {student.group_name ? `группа ${student.group_name}` : 'без группы'} ·
-                    регистрация {formatDate(student.created_at)}
-                  </small>
-                </span>
+                <button
+                  type="button"
+                  className="student-manage-list__open"
+                  onClick={() => {
+                    setStudentsTarget(null)
+                    navigate(`/student/${student.id}`)
+                  }}
+                  title={`Открыть профиль ${student.full_name}`}
+                  data-testid={`open-student-${student.id}`}
+                >
+                  <Avatar profile={student} size="sm" />
+                  <span className="student-manage-list__name">
+                    <strong>{student.full_name}</strong>
+                    <small>
+                      {student.group_name ? `группа ${student.group_name}` : 'без группы'} ·
+                      регистрация {formatDate(student.created_at)}
+                    </small>
+                  </span>
+                </button>
                 <button
                   type="button"
                   className="icon-btn icon-btn--danger"

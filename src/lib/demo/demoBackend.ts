@@ -46,6 +46,7 @@ import {
 } from '../fileTypes'
 import { validateGrade } from '../grades'
 import { normalizeProfile, validatePassword, validateProfile } from '../profile'
+import { normalizeFullName, validateFullName } from '../name'
 import { buildTestAssignments, TEST_STUDENTS } from '../testData'
 import { readFileAsDataUrl } from '../avatar'
 import { uploadLimitBytes } from '../supabase'
@@ -630,6 +631,39 @@ export const demoBackend: Backend = {
         (item) => item.profile.id === id && item.profile.role === 'admin',
       )
       return user ? coerceProfile(user.profile) : null
+    },
+    async getStudent(id: string) {
+      const session = requireSession()
+      const db = loadDb()
+      const user = db.users.find(
+        (item) => item.profile.id === id && item.profile.role === 'student',
+      )
+      if (!user) return null
+      const isSelf = session.id === id
+      const isGroupmate = session.group_name === user.profile.group_name
+      if (session.role !== 'admin' && !isSelf && !isGroupmate) return null
+      return coerceProfile(user.profile)
+    },
+    async updateFullName(fullName: string) {
+      const session = requireSession()
+      const value = normalizeFullName(fullName)
+      const message = validateFullName(value)
+      if (message) throw new Error(message)
+      const db = loadDb()
+      const user = db.users.find((item) => item.profile.id === session.id)
+      if (!user) throw new Error('Профиль не найден')
+      const duplicate = db.users.some(
+        (item) =>
+          item.profile.id !== user.profile.id &&
+          item.profile.role === 'student' &&
+          item.profile.group_name === user.profile.group_name &&
+          sameName(item.profile.full_name, value),
+      )
+      if (duplicate) throw new Error('Студент с таким ФИО уже есть в этой группе')
+      user.profile.full_name = value
+      saveDb()
+      emit()
+      return { ...coerceProfile(user.profile), login: user.login }
     },
     async updateMine(input: ProfileInput) {
       const profile = requireSession()

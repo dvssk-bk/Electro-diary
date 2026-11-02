@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, ClipboardList, RefreshCw, Sparkles } from 'lucide-react'
 import { AppShell } from '../components/AppShell'
 import { DisciplinePicker } from '../components/DisciplinePicker'
@@ -15,6 +15,7 @@ import type { Assignment, JournalData, Submission } from '../lib/types'
 
 export function StudentJournalPage() {
   const { profile } = useAuth()
+  const navigate = useNavigate()
   const { active, loading: disciplinesLoading } = useDisciplines()
   const toast = useToast()
   const [data, setData] = useState<JournalData | null>(null)
@@ -140,6 +141,9 @@ export function StudentJournalPage() {
               teacherName={active.teacher_name}
               mode="student"
               currentStudentId={profile.id}
+              onOpenStudentProfile={(studentId) =>
+                navigate(studentId === profile.id ? '/profile' : `/student/${studentId}`)
+              }
               onSubmitAssignment={(assignment) => setSubmitAssignment(assignment)}
               onOpenSubmission={(id) => setReviewId(id)}
               actions={

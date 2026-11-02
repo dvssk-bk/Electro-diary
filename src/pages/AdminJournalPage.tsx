@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { CalendarPlus, Check, Loader2, RefreshCw, Star, X } from 'lucide-react'
 import { AppShell } from '../components/AppShell'
 import { JournalTable } from '../components/JournalTable'
@@ -36,6 +37,7 @@ interface ReviewState {
 
 export function AdminJournalPage() {
   const toast = useToast()
+  const navigate = useNavigate()
   const { profile } = useAuth()
   const { active, loading: disciplinesLoading } = useDisciplines()
   const [data, setData] = useState<JournalData | null>(null)
@@ -233,6 +235,7 @@ export function AdminJournalPage() {
               teacherName={profile?.full_name || active.teacher_name}
               mode="admin"
               onCellClick={handleCellClick}
+              onOpenStudentProfile={(studentId) => navigate(`/student/${studentId}`)}
               onEditAssignment={(assignment) => {
                 setEditingAssignment(assignment)
                 setAssignmentOpen(true)

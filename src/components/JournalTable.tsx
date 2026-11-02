@@ -14,6 +14,8 @@ import {
 import type { Assignment, JournalData, JournalEntry, Profile } from '../lib/types'
 import { formatDate, formatDateShort, formatDateTime } from '../lib/format'
 import { gradeLabel, gradeRatio, isOverdue } from '../lib/grades'
+import { splitName, primaryName } from '../lib/name'
+import { Avatar } from './Avatar'
 import { GradeBadge } from './GradeBadge'
 
 type SortMode = 'name-asc' | 'name-desc' | 'performance'
@@ -30,25 +32,8 @@ interface JournalTableProps {
   onCellClick?: (student: Profile, assignment: Assignment, entry: JournalEntry | null) => void
   onEditAssignment?: (assignment: Assignment) => void
   onDeleteAssignment?: (assignment: Assignment) => void
+  onOpenStudentProfile?: (studentId: string) => void
   actions?: React.ReactNode
-}
-
-function splitName(fullName: string): {
-  surname: string
-  name: string
-  patronymic: string
-  rest: string
-} {
-  const parts = fullName.trim().split(/\s+/)
-  if (parts.length === 1) {
-    return { surname: fullName, name: '', patronymic: '', rest: '' }
-  }
-  return {
-    surname: parts[0],
-    name: parts[1] ?? '',
-    patronymic: parts.slice(2).join(' '),
-    rest: parts.slice(1).join(' '),
-  }
 }
 
 function entryKey(assignmentId: string, studentId: string): string {
@@ -67,6 +52,7 @@ export function JournalTable({
   onCellClick,
   onEditAssignment,
   onDeleteAssignment,
+  onOpenStudentProfile,
   actions,
 }: JournalTableProps) {
   const [sortMode, setSortMode] = useState<SortMode>('name-asc')
@@ -297,12 +283,29 @@ export function JournalTable({
             {students.map((student) => {
               const stat = statsByStudent.get(student.id)
               const isOwn = student.id === currentStudentId
-              const { surname, rest } = splitName(student.full_name)
+              const { patronymic } = splitName(student.full_name)
+              const displayName = primaryName(student.full_name)
               return (
                 <tr key={student.id} className={isOwn ? 'is-own' : ''}>
                   <th className="student-col" scope="row" title={student.full_name}>
-                    <span className="student-col__name">{rest || surname}</span>
-                    <span className="student-col__rest">{surname}</span>
+                    <span className="student-col__profile">
+                      <button
+                        type="button"
+                        className="student-col__avatar-btn"
+                        onClick={() => onOpenStudentProfile?.(student.id)}
+                        title={`Открыть профиль ${student.full_name}`}
+                        aria-label={`Открыть профиль ${student.full_name}`}
+                        data-testid={`open-student-${student.id}`}
+                      >
+                        <Avatar profile={student} size="sm" />
+                      </button>
+                      <span className="student-col__names">
+                        <span className="student-col__name">{displayName}</span>
+                        {patronymic ? (
+                          <span className="student-col__rest">{patronymic}</span>
+                        ) : null}
+                      </span>
+                    </span>
                     <span className="student-col__count">
                       {stat?.submitted ?? 0} из {data.assignments.length} сдано
                     </span>
@@ -408,10 +411,7 @@ export function JournalTable({
             const stat = statsByStudent.get(student.id)
             const isOwn = student.id === currentStudentId
             const expanded = expandedStudentId === student.id
-            const { surname, name, patronymic, rest } = splitName(student.full_name)
-            const initials = `${(name || surname).slice(0, 1)}${
-              name ? surname.slice(0, 1) : ''
-            }`.toUpperCase()
+            const { patronymic } = splitName(student.full_name)
             return (
               <article
                 key={student.id}
@@ -420,23 +420,38 @@ export function JournalTable({
                 }`}
                 data-testid={`mobile-student-${student.id}`}
               >
-                <button
-                  type="button"
-                  className="journal-mobile__student-head"
-                  onClick={() => setExpandedStudentId(expanded ? null : student.id)}
-                  aria-expanded={expanded}
-                >
-                  <span className="journal-mobile__avatar">{initials}</span>
-                  <span className="journal-mobile__who">
-                    <strong>{name ? `${name} ${surname}` : surname}</strong>
-                    <span>
-                      {patronymic ? `${patronymic} · ` : rest ? '' : 'студент · '}
-                      {stat?.submitted ?? 0} из {data.assignments.length} сдано
+                <div className="journal-mobile__student-head">
+                  <button
+                    type="button"
+                    className="journal-mobile__avatar-btn"
+                    onClick={() => onOpenStudentProfile?.(student.id)}
+                    title={`Открыть профиль ${student.full_name}`}
+                    aria-label={`Открыть профиль ${student.full_name}`}
+                    data-testid={`mobile-open-student-${student.id}`}
+                  >
+                    <Avatar
+                      profile={student}
+                      size="md"
+                      className="journal-mobile__avatar"
+                    />
+                  </button>
+                  <button
+                    type="button"
+                    className="journal-mobile__expand"
+                    onClick={() => setExpandedStudentId(expanded ? null : student.id)}
+                    aria-expanded={expanded}
+                  >
+                    <span className="journal-mobile__who">
+                      <strong>{primaryName(student.full_name)}</strong>
+                      <span>
+                        {patronymic ? `${patronymic} · ` : 'студент · '}
+                        {stat?.submitted ?? 0} из {data.assignments.length} сдано
+                      </span>
                     </span>
-                  </span>
-                  {isOwn ? <span className="journal-mobile__you">вы</span> : null}
-                  <ChevronDown className="journal-mobile__chevron" size={18} />
-                </button>
+                    {isOwn ? <span className="journal-mobile__you">вы</span> : null}
+                    <ChevronDown className="journal-mobile__chevron" size={18} />
+                  </button>
+                </div>
 
                 {expanded ? (
                   <div className="journal-mobile__assignments">

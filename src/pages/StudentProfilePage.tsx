@@ -19,6 +19,7 @@ import { useToast } from '../context/ToastContext'
 import { backend } from '../lib/api'
 import { prepareAvatar } from '../lib/avatar'
 import { PASSWORD_LIMITS, PROFILE_LIMITS, validatePassword, validateProfile } from '../lib/profile'
+import { joinName, splitName, validateFullName } from '../lib/name'
 
 export function StudentProfilePage() {
   const { profile, refreshProfile } = useAuth()
@@ -26,6 +27,11 @@ export function StudentProfilePage() {
   const [email, setEmail] = useState(profile?.contact_email ?? '')
   const [phone, setPhone] = useState(profile?.phone ?? '')
   const [bio, setBio] = useState(profile?.bio ?? '')
+  const [surname, setSurname] = useState(() => splitName(profile?.full_name ?? '').surname)
+  const [firstName, setFirstName] = useState(() => splitName(profile?.full_name ?? '').name)
+  const [patronymic, setPatronymic] = useState(() => splitName(profile?.full_name ?? '').patronymic)
+  const [nameSaving, setNameSaving] = useState(false)
+  const [nameError, setNameError] = useState('')
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
   const [avatarBusy, setAvatarBusy] = useState(false)
@@ -69,6 +75,31 @@ export function StudentProfilePage() {
       setFormError((err as Error).message)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const saveFullName = async (event: FormEvent) => {
+    event.preventDefault()
+    setNameError('')
+    const value = joinName({ surname, name: firstName, patronymic })
+    const message = validateFullName(value)
+    if (message) {
+      setNameError(message)
+      return
+    }
+    setNameSaving(true)
+    try {
+      const updated = await backend.profiles.updateFullName(value)
+      const parts = splitName(updated.full_name)
+      setSurname(parts.surname)
+      setFirstName(parts.name)
+      setPatronymic(parts.patronymic)
+      await refreshProfile()
+      toast.success('ФИО обновлено')
+    } catch (err) {
+      setNameError((err as Error).message)
+    } finally {
+      setNameSaving(false)
     }
   }
 
@@ -232,6 +263,60 @@ export function StudentProfilePage() {
         </aside>
 
         <section className="profile-panel">
+          <form className="profile-form" onSubmit={saveFullName}>
+            <div>
+              <span className="eyebrow">Личные данные</span>
+              <h2>ФИО</h2>
+              <p className="muted">
+                Фамилия, имя и отчество отображаются в журнале. Если данные указаны неверно —
+                исправьте их здесь, аккаунт пересоздавать не нужно.
+              </p>
+            </div>
+
+            <div className="form-row form-row--two">
+              <label className="field">
+                <span>Фамилия</span>
+                <input
+                  value={surname}
+                  onChange={(event) => setSurname(event.target.value)}
+                  placeholder="Иванов"
+                  maxLength={60}
+                  required
+                />
+              </label>
+              <label className="field">
+                <span>Имя</span>
+                <input
+                  value={firstName}
+                  onChange={(event) => setFirstName(event.target.value)}
+                  placeholder="Иван"
+                  maxLength={60}
+                  required
+                />
+              </label>
+            </div>
+
+            <label className="field">
+              <span>Отчество</span>
+              <input
+                value={patronymic}
+                onChange={(event) => setPatronymic(event.target.value)}
+                placeholder="Иванович"
+                maxLength={60}
+              />
+              <small className="field__hint">Необязательно, но отображается в журнале отдельной строкой.</small>
+            </label>
+
+            {nameError ? <ErrorBox>{nameError}</ErrorBox> : null}
+
+            <div className="profile-form__actions">
+              <button type="submit" className="btn btn--primary" disabled={nameSaving}>
+                {nameSaving ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
+                Сохранить ФИО
+              </button>
+            </div>
+          </form>
+
           <form className="profile-form" onSubmit={save}>
             <div>
               <span className="eyebrow">Личные данные</span>

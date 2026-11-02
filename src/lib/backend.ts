@@ -56,7 +56,11 @@ export interface Backend {
   }
   profiles: {
     getTeacher: (id: string) => Promise<Profile | null>
+    /** Профиль студента для просмотра: доступен себе, одногруппникам и преподавателю. */
+    getStudent: (id: string) => Promise<Profile | null>
     updateMine: (input: ProfileInput) => Promise<Profile>
+    /** Смена ФИО собственного профиля (Фамилия Имя Отчество). */
+    updateFullName: (fullName: string) => Promise<Profile>
     uploadAvatar: (file: File) => Promise<Profile>
     removeAvatar: () => Promise<Profile>
   }

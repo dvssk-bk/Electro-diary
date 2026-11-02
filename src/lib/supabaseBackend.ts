@@ -34,6 +34,7 @@ import {
 } from './fileTypes'
 import { validateGrade } from './grades'
 import { normalizeProfile, validatePassword, validateProfile } from './profile'
+import { normalizeFullName, validateFullName } from './name'
 import { buildTestAssignments, TEST_STUDENTS } from './testData'
 
 function client(): SupabaseClient {
@@ -737,6 +738,36 @@ export const supabaseBackend: Backend = {
         bio: row.bio,
       }
     },
+    async getStudent(id: string): Promise<Profile | null> {
+      await requireProfile()
+      const { data, error } = await client()
+        .from('profiles')
+        .select(PROFILE_SELECT)
+        .eq('id', id)
+        .eq('role', 'student')
+        .maybeSingle()
+      if (error) throw new Error(error.message)
+      return data ? mapProfile(data as ProfileRow) : null
+    },
+    async updateFullName(fullName: string): Promise<Profile> {
+      const user = await requireProfile()
+      const value = normalizeFullName(fullName)
+      const message = validateFullName(value)
+      if (message) throw new Error(message)
+      const { data, error } = await client()
+        .from('profiles')
+        .update({ full_name: value })
+        .eq('id', user.id)
+        .select(PROFILE_SELECT)
+        .single()
+      if (error) {
+        if (error.code === '23505') {
+          throw new Error('Студент с таким ФИО уже есть в этой группе')
+        }
+        throw new Error(error.message)
+      }
+      return { ...mapProfile(data as ProfileRow), login: user.login }
+    },
     async updateMine(input: ProfileInput): Promise<Profile> {
       const user = await requireProfile()
       const value = normalizeProfile(input)
@@ -848,12 +879,21 @@ export const supabaseBackend: Backend = {
   async students(groupName: string) {
     const { data, error } = await client()
       .from('profiles')
-      .select('id, role, full_name, group_name, created_at')
+      .select('id, role, full_name, group_name, created_at, avatar_path')
       .eq('group_name', groupName)
       .eq('role', 'student')
       .order('full_name')
     if (error) throw new Error(error.message)
-    return (data ?? []) as Profile[]
+    return ((data ?? []) as Array<
+      Pick<ProfileRow, 'id' | 'role' | 'full_name' | 'group_name' | 'created_at' | 'avatar_path'>
+    >).map((row) => ({
+      id: row.id,
+      role: row.role,
+      full_name: row.full_name,
+      group_name: row.group_name,
+      created_at: row.created_at,
+      avatar_url: avatarPublicUrl(row.avatar_path),
+    }))
   },
 
   async removeStudent(studentId: string) {
@@ -1134,7 +1174,7 @@ export const supabaseBackend: Backend = {
     const [studentsResult, assignmentsResult] = await Promise.all([
       db
         .from('profiles')
-        .select('id, role, full_name, group_name, created_at')
+        .select('id, role, full_name, group_name, created_at, avatar_path')
         .eq('group_name', group)
         .eq('role', 'student')
         .order('full_name'),
@@ -1221,7 +1261,16 @@ export const supabaseBackend: Backend = {
 
     return {
       assignments: withAttachments(assignments, attachmentMap),
-      students: (studentsResult.data ?? []) as Profile[],
+      students: ((studentsResult.data ?? []) as Array<
+        Pick<ProfileRow, 'id' | 'role' | 'full_name' | 'group_name' | 'created_at' | 'avatar_path'>
+      >).map((row) => ({
+        id: row.id,
+        role: row.role,
+        full_name: row.full_name,
+        group_name: row.group_name,
+        created_at: row.created_at,
+        avatar_url: avatarPublicUrl(row.avatar_path),
+      })),
       entries,
     }
   },

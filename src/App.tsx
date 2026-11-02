@@ -8,6 +8,7 @@ import { StudentJournalPage } from './pages/StudentJournalPage'
 import { StudentAssignmentsPage } from './pages/StudentAssignmentsPage'
 import { StudentExtraPage } from './pages/StudentExtraPage'
 import { StudentProfilePage } from './pages/StudentProfilePage'
+import { StudentPublicProfilePage } from './pages/StudentPublicProfilePage'
 import { AdminJournalPage } from './pages/AdminJournalPage'
 import { AdminAssignmentsPage } from './pages/AdminAssignmentsPage'
 import { AdminExtraPage } from './pages/AdminExtraPage'
@@ -88,6 +89,14 @@ export default function App() {
               <RequireRole role="student">
                 <StudentProfilePage />
               </RequireRole>
+            }
+          />
+          <Route
+            path="/student/:studentId"
+            element={
+              <RequireAuth>
+                <StudentPublicProfilePage />
+              </RequireAuth>
             }
           />
           <Route path="/admin" element={<AdminLoginPage />} />
