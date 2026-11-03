@@ -13,12 +13,23 @@ export interface Profile {
   contact_email?: string | null
   phone?: string | null
   bio?: string | null
+  /** День рождения в формате `MM-DD`. Год не хранится и не показывается. */
+  birthday_md?: string | null
+  /** Рамка аватара: `#RRGGBB` или `#RRGGBB,#RRGGBB` (градиент). */
+  avatar_frame?: string | null
 }
 
+/**
+ * Патч для обновления собственного профиля: обновляются только
+ * переданные поля, поэтому формы (контакты, рамка, день рождения)
+ * не затирают изменения друг друга.
+ */
 export interface ProfileInput {
-  contact_email: string | null
-  phone: string | null
-  bio: string | null
+  contact_email?: string | null
+  phone?: string | null
+  bio?: string | null
+  birthday_md?: string | null
+  avatar_frame?: string | null
 }
 
 export interface TestDataResult {
@@ -186,7 +197,10 @@ export interface NewDiscipline {
 export interface WorkRow {
   submission: Submission
   assignment: Assignment
-  student: Pick<Profile, 'id' | 'full_name' | 'group_name'>
+  student: Pick<
+    Profile,
+    'id' | 'full_name' | 'group_name' | 'avatar_url' | 'avatar_frame' | 'birthday_md'
+  >
 }
 
 /** Общее дополнительное задание: не привязано к дисциплине и видно всем группам. */
@@ -225,7 +239,10 @@ export interface ExtraSubmission {
 export interface ExtraWorkRow {
   submission: ExtraSubmission
   assignment: ExtraAssignment
-  student: Pick<Profile, 'id' | 'full_name' | 'group_name'>
+  student: Pick<
+    Profile,
+    'id' | 'full_name' | 'group_name' | 'avatar_url' | 'avatar_frame' | 'birthday_md'
+  >
 }
 
 export interface ExtraLeaderboardEntry {

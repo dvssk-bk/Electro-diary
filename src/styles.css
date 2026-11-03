@@ -6817,3 +6817,209 @@ body.has-season-garland .admin-login {
     top: 82vh;
   }
 }
+
+/* ============ Профиль: рамка аватара и день рождения ============ */
+
+/* Рамка — кольцо вокруг аватара. Цвет/градиент приходит из
+   profiles.avatar_frame и подставляется инлайново (src/lib/profile.ts). */
+.avatar-frame {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  padding: 3px;
+  border-radius: 50%;
+  line-height: 0;
+}
+
+.avatar-frame--xl {
+  padding: 5px;
+}
+
+.frame-editor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+}
+
+.frame-editor__preview {
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  flex: none;
+  border-radius: 50%;
+  background: #f2f5f8;
+  border: 1px dashed var(--line-strong);
+}
+
+.frame-editor__controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-width: 230px;
+}
+
+.frame-editor__colors {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.color-well {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.color-well input[type='color'] {
+  width: 44px;
+  height: 32px;
+  padding: 2px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.color-well input[type='color']:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.frame-swatches {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.frame-swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--line-strong);
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+
+.frame-swatch:hover {
+  transform: scale(1.12);
+}
+
+.frame-swatch[aria-pressed='true'] {
+  box-shadow: 0 0 0 2px var(--navy-600);
+}
+
+.frame-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.frame-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--navy-600);
+}
+
+/* Поздравительная полоса: живёт над шапкой, пока открыта любая страница. */
+.birthday-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 9px 18px;
+  text-align: center;
+  background: linear-gradient(100deg, #ffe6ef, #ffefd0 48%, #fff6d8);
+  color: var(--navy-950);
+  border-bottom: 1px solid rgba(214, 122, 40, 0.28);
+  font-size: 13.5px;
+  line-height: 1.35;
+}
+
+.birthday-bar__cake {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.birthday-bar__text {
+  max-width: 920px;
+}
+
+/* Конфетти поверх страниц, но под модалками (1000) и тостами (2000). */
+.birthday-confetti {
+  position: fixed;
+  inset: 0;
+  z-index: 950;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.birthday-piece {
+  position: absolute;
+  top: -16px;
+  border-radius: 2px;
+  opacity: 0.9;
+  animation-name: birthday-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+.birthday-piece--round {
+  border-radius: 50%;
+}
+
+@keyframes birthday-fall {
+  0% {
+    transform: translate3d(0, -2vh, 0) rotate(0deg);
+  }
+  100% {
+    transform: translate3d(var(--piece-drift, 0px), 108vh, 0) rotate(720deg);
+  }
+}
+
+/* Личный день рождения: тёплый фон и торт в шапке. Полоса сверху занимает
+   44px, поэтому высота оболочки уменьшается — страница не «уезжает». */
+body.has-birthday .app-shell {
+  min-height: calc(100vh - 44px);
+  background:
+    radial-gradient(circle at 10% 0%, rgba(255, 150, 185, 0.14), transparent 36%),
+    radial-gradient(circle at 92% 4%, rgba(255, 202, 110, 0.16), transparent 38%),
+    radial-gradient(circle at 8% 0%, rgba(55, 103, 143, 0.08), transparent 34%),
+    var(--bg);
+}
+
+body.has-birthday .user-chip__text span::after {
+  content: " 🎂";
+}
+
+/* Конфетти замирает рассеянным полем, как и снег. */
+@media (prefers-reduced-motion: reduce) {
+  .birthday-piece {
+    animation: none !important;
+    top: 12vh;
+  }
+
+  .birthday-piece:nth-child(3n) {
+    top: 42vh;
+  }
+
+  .birthday-piece:nth-child(3n + 1) {
+    top: 68vh;
+  }
+
+  .birthday-piece:nth-child(4n) {
+    top: 86vh;
+  }
+}

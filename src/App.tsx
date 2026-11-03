@@ -15,6 +15,7 @@ import { AdminExtraPage } from './pages/AdminExtraPage'
 import { AdminGroupsPage } from './pages/AdminGroupsPage'
 import { TeacherProfilePage } from './pages/TeacherProfilePage'
 import { SeasonalDecor } from './components/SeasonalDecor'
+import { BirthdayDecor } from './components/BirthdayDecor'
 import { Loader2 } from 'lucide-react'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -59,6 +60,7 @@ export default function App() {
       <ToastProvider>
         <DisciplineProvider>
           <SeasonalDecor />
+          <BirthdayDecor />
           <Routes>
           <Route path="/" element={<StudentAuthPage />} />
           <Route

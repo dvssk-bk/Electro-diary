@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'r
 import { Link, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
+  Cake,
   Camera,
   KeyRound,
   Loader2,
@@ -14,10 +15,12 @@ import {
 import { AppShell } from '../components/AppShell'
 import { Avatar } from '../components/Avatar'
 import { ErrorBox, Spinner } from '../components/Feedback'
+import { ProfileExtrasForm } from '../components/ProfileExtrasForm'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { backend } from '../lib/api'
 import { prepareAvatar } from '../lib/avatar'
+import { formatBirthday } from '../lib/birthday'
 import { PASSWORD_LIMITS, PROFILE_LIMITS, validatePassword, validateProfile } from '../lib/profile'
 import type { Profile } from '../lib/types'
 
@@ -255,6 +258,16 @@ export function TeacherProfilePage({ self = false }: { self?: boolean }) {
               ) : null}
               <div>
                 <dt>
+                  <Cake size={14} /> День рождения
+                </dt>
+                <dd>
+                  {formatBirthday(teacher.birthday_md) ?? (
+                    <span className="muted">Не указан</span>
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt>
                   <Mail size={14} /> Почта
                 </dt>
                 <dd>
@@ -340,6 +353,8 @@ export function TeacherProfilePage({ self = false }: { self?: boolean }) {
                   </div>
                 </form>
 
+                <ProfileExtrasForm profile={teacher} onSaved={setTeacher} />
+
                 <form className="profile-form profile-form--password" onSubmit={changePassword}>
                   <div>
                     <span className="eyebrow">Безопасность</span>
@@ -411,6 +426,10 @@ export function TeacherProfilePage({ self = false }: { self?: boolean }) {
                   {teacher.bio || 'Преподаватель пока не добавил описание.'}
                 </p>
                 <div className="profile-readonly__contacts">
+                  <span>
+                    <Cake size={15} />
+                    {formatBirthday(teacher.birthday_md) ?? 'День рождения не указан'}
+                  </span>
                   <span>
                     <Mail size={15} />
                     {teacher.contact_email ? (

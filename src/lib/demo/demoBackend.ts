@@ -673,9 +673,12 @@ export const demoBackend: Backend = {
       const db = loadDb()
       const user = db.users.find((item) => item.profile.id === profile.id)
       if (!user) throw new Error('Профиль не найден')
-      user.profile.contact_email = value.contact_email
-      user.profile.phone = value.phone
-      user.profile.bio = value.bio
+      // Патч: обновляем только переданные поля.
+      if (value.contact_email !== undefined) user.profile.contact_email = value.contact_email
+      if (value.phone !== undefined) user.profile.phone = value.phone
+      if (value.bio !== undefined) user.profile.bio = value.bio
+      if (value.birthday_md !== undefined) user.profile.birthday_md = value.birthday_md
+      if (value.avatar_frame !== undefined) user.profile.avatar_frame = value.avatar_frame
       saveDb()
       emit()
       return { ...coerceProfile(user.profile), login: user.login }

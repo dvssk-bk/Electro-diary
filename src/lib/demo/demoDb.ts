@@ -11,7 +11,7 @@ import type {
   SubmissionVersion,
 } from '../types'
 const DB_KEY = 'diary_demo_v5'
-const DB_VERSION = 5 as const
+const DB_VERSION = 6 as const
 
 export interface DemoUser {
   login: string
@@ -20,7 +20,8 @@ export interface DemoUser {
 }
 
 export interface DemoDb {
-  version: typeof DB_VERSION
+  /** Текущая версия схемы; старые базы обновляются в loadDb(). */
+  version: number
   groups: Group[]
   users: DemoUser[]
   disciplines: Discipline[]
@@ -75,6 +76,21 @@ export function loadDb(): DemoDb {
     const raw = localStorage.getItem(DB_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as DemoDb
+      if (parsed && parsed.version === 5) {
+        // Версия 6: рамка аватара и день рождения. Старые профили
+        // просто получают пустые поля, данные не трогаем.
+        parsed.version = 6
+        parsed.extraAssignments ??= []
+        parsed.extraSubmissions ??= []
+        parsed.assignmentAttachments ??= []
+        for (const user of parsed.users) {
+          user.profile.birthday_md ??= null
+          user.profile.avatar_frame ??= null
+        }
+        cache = parsed
+        saveDb()
+        return cache
+      }
       if (parsed && parsed.version === DB_VERSION) {
         // Старые демо-базы не знают про доп. задания — добавляем пустые списки
         // без сброса уже созданных дисциплин и работ.
@@ -132,6 +148,8 @@ export function coerceProfile(value: Profile): Profile {
     contact_email: value.contact_email ?? null,
     phone: value.phone ?? null,
     bio: value.bio ?? null,
+    birthday_md: value.birthday_md ?? null,
+    avatar_frame: value.avatar_frame ?? null,
   }
 }
 

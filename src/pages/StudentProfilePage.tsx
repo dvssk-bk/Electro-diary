@@ -2,6 +2,7 @@ import { useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowLeft,
+  Cake,
   Camera,
   KeyRound,
   Loader2,
@@ -14,9 +15,11 @@ import {
 import { AppShell } from '../components/AppShell'
 import { Avatar } from '../components/Avatar'
 import { ErrorBox } from '../components/Feedback'
+import { ProfileExtrasForm } from '../components/ProfileExtrasForm'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { backend } from '../lib/api'
+import { formatBirthday } from '../lib/birthday'
 import { prepareAvatar } from '../lib/avatar'
 import { PASSWORD_LIMITS, PROFILE_LIMITS, validatePassword, validateProfile } from '../lib/profile'
 import { joinName, splitName, validateFullName } from '../lib/name'
@@ -237,6 +240,14 @@ export function StudentProfilePage() {
             ) : null}
             <div>
               <dt>
+                <Cake size={14} /> День рождения
+              </dt>
+              <dd>
+                {formatBirthday(profile.birthday_md) ?? <span className="muted">Не указан</span>}
+              </dd>
+            </div>
+            <div>
+              <dt>
                 <Mail size={14} /> Почта
               </dt>
               <dd>
@@ -372,6 +383,8 @@ export function StudentProfilePage() {
               </button>
             </div>
           </form>
+
+          <ProfileExtrasForm profile={profile} />
 
           <form className="profile-form profile-form--password" onSubmit={changePassword}>
             <div>

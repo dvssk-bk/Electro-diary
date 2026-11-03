@@ -52,6 +52,8 @@ interface ProfileRow {
   contact_email: string | null
   phone: string | null
   bio: string | null
+  birthday_md: string | null
+  avatar_frame: string | null
 }
 
 function avatarPublicUrl(path: string | null | undefined): string | null {
@@ -71,11 +73,13 @@ function mapProfile(row: ProfileRow): Profile {
     contact_email: row.contact_email,
     phone: row.phone,
     bio: row.bio,
+    birthday_md: row.birthday_md,
+    avatar_frame: row.avatar_frame,
   }
 }
 
 const PROFILE_SELECT =
-  'id, role, full_name, group_name, created_at, avatar_path, contact_email, phone, bio'
+  'id, role, full_name, group_name, created_at, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame'
 
 async function fetchProfile(id: string): Promise<Profile | null> {
   const { data, error } = await client()
@@ -720,7 +724,9 @@ export const supabaseBackend: Backend = {
     async getTeacher(id: string): Promise<Profile | null> {
       const { data, error } = await client()
         .from('teacher_profiles')
-        .select('id, full_name, avatar_path, contact_email, phone, bio, created_at')
+        .select(
+          'id, full_name, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame, created_at',
+        )
         .eq('id', id)
         .maybeSingle()
       if (error) throw new Error(error.message)
@@ -736,6 +742,8 @@ export const supabaseBackend: Backend = {
         contact_email: row.contact_email,
         phone: row.phone,
         bio: row.bio,
+        birthday_md: row.birthday_md,
+        avatar_frame: row.avatar_frame,
       }
     },
     async getStudent(id: string): Promise<Profile | null> {
@@ -773,13 +781,16 @@ export const supabaseBackend: Backend = {
       const value = normalizeProfile(input)
       const message = validateProfile(value)
       if (message) throw new Error(message)
+      if (Object.keys(value).length === 0) {
+        const current = await fetchProfile(user.id)
+        if (!current) throw new Error('Профиль не найден')
+        return { ...current, login: user.login }
+      }
+      // Патч: отправляем только переданные поля, чтобы разные формы
+      // профиля не затирали изменения друг друга.
       const { data, error } = await client()
         .from('profiles')
-        .update({
-          contact_email: value.contact_email,
-          phone: value.phone,
-          bio: value.bio,
-        })
+        .update(value)
         .eq('id', user.id)
         .select(PROFILE_SELECT)
         .single()
@@ -879,13 +890,18 @@ export const supabaseBackend: Backend = {
   async students(groupName: string) {
     const { data, error } = await client()
       .from('profiles')
-      .select('id, role, full_name, group_name, created_at, avatar_path')
+      .select(
+        'id, role, full_name, group_name, created_at, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame',
+      )
       .eq('group_name', groupName)
       .eq('role', 'student')
       .order('full_name')
     if (error) throw new Error(error.message)
     return ((data ?? []) as Array<
-      Pick<ProfileRow, 'id' | 'role' | 'full_name' | 'group_name' | 'created_at' | 'avatar_path'>
+      Pick<
+        ProfileRow,
+        'id' | 'role' | 'full_name' | 'group_name' | 'created_at' | 'avatar_path' | 'contact_email' | 'phone' | 'bio' | 'birthday_md' | 'avatar_frame'
+      >
     >).map((row) => ({
       id: row.id,
       role: row.role,
@@ -893,6 +909,11 @@ export const supabaseBackend: Backend = {
       group_name: row.group_name,
       created_at: row.created_at,
       avatar_url: avatarPublicUrl(row.avatar_path),
+      contact_email: row.contact_email,
+      phone: row.phone,
+      bio: row.bio,
+      birthday_md: row.birthday_md,
+      avatar_frame: row.avatar_frame,
     }))
   },
 
@@ -1174,7 +1195,9 @@ export const supabaseBackend: Backend = {
     const [studentsResult, assignmentsResult] = await Promise.all([
       db
         .from('profiles')
-        .select('id, role, full_name, group_name, created_at, avatar_path')
+        .select(
+          'id, role, full_name, group_name, created_at, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame',
+        )
         .eq('group_name', group)
         .eq('role', 'student')
         .order('full_name'),
@@ -1262,7 +1285,20 @@ export const supabaseBackend: Backend = {
     return {
       assignments: withAttachments(assignments, attachmentMap),
       students: ((studentsResult.data ?? []) as Array<
-        Pick<ProfileRow, 'id' | 'role' | 'full_name' | 'group_name' | 'created_at' | 'avatar_path'>
+        Pick<
+          ProfileRow,
+          | 'id'
+          | 'role'
+          | 'full_name'
+          | 'group_name'
+          | 'created_at'
+          | 'avatar_path'
+          | 'contact_email'
+          | 'phone'
+          | 'bio'
+          | 'birthday_md'
+          | 'avatar_frame'
+        >
       >).map((row) => ({
         id: row.id,
         role: row.role,
@@ -1270,6 +1306,11 @@ export const supabaseBackend: Backend = {
         group_name: row.group_name,
         created_at: row.created_at,
         avatar_url: avatarPublicUrl(row.avatar_path),
+        contact_email: row.contact_email,
+        phone: row.phone,
+        bio: row.bio,
+        birthday_md: row.birthday_md,
+        avatar_frame: row.avatar_frame,
       })),
       entries,
     }
@@ -1294,7 +1335,9 @@ export const supabaseBackend: Backend = {
         db.from('assignments').select('*').eq('discipline_id', disciplineId),
         db
           .from('profiles')
-          .select('id, full_name, group_name, role')
+          .select(
+            'id, full_name, group_name, role, avatar_path, avatar_frame, birthday_md',
+          )
           .eq('group_name', discipline.group_name)
           .eq('role', 'student'),
       ])
@@ -1303,9 +1346,24 @@ export const supabaseBackend: Backend = {
 
       const assignments = (assignmentsResult.data ?? []) as Assignment[]
       const assignmentById = new Map(assignments.map((a) => [a.id, a]))
-      const studentById = new Map(
-        ((studentsResult.data ?? []) as Profile[]).map((s) => [s.id, s]),
-      )
+      const studentById = new Map<string, WorkRow['student']>()
+      for (const row of ((studentsResult.data ?? []) as Array<{
+        id: string
+        full_name: string
+        group_name: string | null
+        avatar_path: string | null
+        avatar_frame: string | null
+        birthday_md: string | null
+      }>)) {
+        studentById.set(row.id, {
+          id: row.id,
+          full_name: row.full_name,
+          group_name: row.group_name,
+          avatar_url: avatarPublicUrl(row.avatar_path),
+          avatar_frame: row.avatar_frame,
+          birthday_md: row.birthday_md,
+        })
+      }
       const assignmentIds = filters.assignmentId ? [filters.assignmentId] : assignments.map((a) => a.id)
       if (!assignmentIds.length) return []
 
@@ -1318,22 +1376,24 @@ export const supabaseBackend: Backend = {
       const { data, error } = await query
       if (error) throw new Error(error.message)
 
-      return ((data ?? []) as Submission[])
-        .map((submission) => {
-          const assignment = assignmentById.get(submission.assignment_id)
-          const student = studentById.get(submission.student_id)
-          if (!assignment || !student) return null
-          return {
-            submission,
-            assignment,
-            student: {
-              id: student.id,
-              full_name: student.full_name,
-              group_name: student.group_name,
-            },
-          } satisfies WorkRow
-        })
-        .filter((row): row is WorkRow => row !== null)
+      const rows: (WorkRow | null)[] = (data ?? []).map((submission) => {
+        const assignment = assignmentById.get(submission.assignment_id)
+        const student = studentById.get(submission.student_id)
+        if (!assignment || !student) return null
+        return {
+          submission,
+          assignment,
+          student: {
+            id: student.id,
+            full_name: student.full_name,
+            group_name: student.group_name,
+            avatar_url: student.avatar_url,
+            avatar_frame: student.avatar_frame,
+            birthday_md: student.birthday_md,
+          },
+        }
+      })
+      return rows.filter((row): row is WorkRow => row !== null)
     },
     async get(id: string) {
       const { data, error } = await client().from('submissions').select('*').eq('id', id).single()
@@ -1695,7 +1755,9 @@ export const supabaseBackend: Backend = {
         db.from('extra_assignments').select('*').in('id', assignmentIds),
         db
           .from('profiles')
-          .select('id, full_name, group_name, role')
+          .select(
+            'id, full_name, group_name, role, avatar_path, avatar_frame, birthday_md',
+          )
           .in('id', studentIds)
           .eq('role', 'student'),
       ])
@@ -1704,11 +1766,26 @@ export const supabaseBackend: Backend = {
       const assignmentById = new Map(
         ((assignmentsResult.data ?? []) as ExtraAssignment[]).map((item) => [item.id, item]),
       )
-      const studentById = new Map(
-        ((studentsResult.data ?? []) as Profile[]).map((item) => [item.id, item]),
-      )
+      const studentById = new Map<string, ExtraWorkRow['student']>()
+      for (const row of ((studentsResult.data ?? []) as Array<{
+        id: string
+        full_name: string
+        group_name: string | null
+        avatar_path: string | null
+        avatar_frame: string | null
+        birthday_md: string | null
+      }>)) {
+        studentById.set(row.id, {
+          id: row.id,
+          full_name: row.full_name,
+          group_name: row.group_name,
+          avatar_url: avatarPublicUrl(row.avatar_path),
+          avatar_frame: row.avatar_frame,
+          birthday_md: row.birthday_md,
+        })
+      }
 
-      return submissions
+      const rows: (ExtraWorkRow | null)[] = submissions
         .map((submission) => {
           const assignment = assignmentById.get(submission.assignment_id)
           const student = studentById.get(submission.student_id)
@@ -1720,10 +1797,13 @@ export const supabaseBackend: Backend = {
               id: student.id,
               full_name: student.full_name,
               group_name: student.group_name,
+              avatar_url: student.avatar_url,
+              avatar_frame: student.avatar_frame,
+              birthday_md: student.birthday_md,
             },
-          } satisfies ExtraWorkRow
+          }
         })
-        .filter((row): row is ExtraWorkRow => row !== null)
+      return rows.filter((row): row is ExtraWorkRow => row !== null)
     },
     async upload(assignmentId: string, file: File, onProgress?: UploadProgress) {
       const student = await requireStudent()

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Mail, Phone, UserRound, Users } from 'lucide-react'
+import { ArrowLeft, Cake, Mail, Phone, UserRound, Users } from 'lucide-react'
 import { AppShell } from '../components/AppShell'
 import { Avatar } from '../components/Avatar'
 import { ErrorBox, Spinner } from '../components/Feedback'
 import { useAuth } from '../context/AuthContext'
 import { backend } from '../lib/api'
+import { formatBirthday } from '../lib/birthday'
 import { formatDate } from '../lib/format'
 import { splitName } from '../lib/name'
 import type { Profile } from '../lib/types'
@@ -100,6 +101,10 @@ export function StudentPublicProfilePage() {
                 {student.bio || 'Студент пока не добавил описание.'}
               </p>
               <div className="profile-readonly__contacts">
+                <span>
+                  <Cake size={15} />
+                  {formatBirthday(student.birthday_md) ?? 'День рождения не указан'}
+                </span>
                 <span>
                   <Mail size={15} />
                   {student.contact_email ? (
