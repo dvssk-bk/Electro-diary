@@ -261,7 +261,7 @@ export function AdminExtraPage() {
   const [deleteTarget, setDeleteTarget] = useState<ExtraAssignment | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [deleteError, setDeleteError] = useState('')
-  const [expandedExtraId, setExpandedExtraId] = useState<string | null>(null)
+  const [detailsTarget, setDetailsTarget] = useState<ExtraAssignment | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -398,14 +398,7 @@ export function AdminExtraPage() {
                   <article
                     className="extra-admin-card"
                     key={assignment.id}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => {
-                      if (assignment.description) {
-                        setExpandedExtraId((current) =>
-                          current === assignment.id ? null : assignment.id,
-                        )
-                      }
-                    }}
+                    onClick={() => setDetailsTarget(assignment)}
                   >
                     <div className="extra-admin-card__top">
                       <span className="badge badge--blue">
@@ -419,9 +412,7 @@ export function AdminExtraPage() {
                     </div>
                     <h3>{assignment.title}</h3>
                     <p
-                      className={`${assignment.description ? '' : 'muted'}${
-                        expandedExtraId === assignment.id ? ' is-open' : ''
-                      }`}
+                      className={assignment.description ? '' : 'muted'}
                     >
                       {assignment.description || 'Описание не добавлено.'}
                     </p>
@@ -503,6 +494,63 @@ export function AdminExtraPage() {
         onClose={() => setWorksTarget(null)}
         onChanged={() => setRefreshKey((value) => value + 1)}
       />
+
+      <Modal
+        open={Boolean(detailsTarget)}
+        onClose={() => setDetailsTarget(null)}
+        title={detailsTarget ? `Задание · ${detailsTarget.title}` : 'Задание'}
+        subtitle="Общее задание без привязки к дисциплине"
+        size="full"
+      >
+        {detailsTarget ? (
+          <div className="extra-details">
+            <div className="extra-details__meta">
+              <span>
+                <Users size={14} />{' '}
+                {(statsByAssignment.get(detailsTarget.id)?.total ?? 0)}{' '}
+                {plural(statsByAssignment.get(detailsTarget.id)?.total ?? 0, ['сдача', 'сдачи', 'сдач'])}
+              </span>
+              <span>
+                <CheckCircle2 size={14} /> {statsByAssignment.get(detailsTarget.id)?.graded ?? 0}{' '}
+                оценено
+              </span>
+              <span>
+                <Clock3 size={14} />{' '}
+                {detailsTarget.due_at ? `до ${formatDateTime(detailsTarget.due_at)}` : 'без дедлайна'}
+              </span>
+            </div>
+            <p className="extra-details__desc">
+              {detailsTarget.description?.trim() || 'Описание не добавлено.'}
+            </p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn--secondary btn--sm"
+                onClick={() => setWorksTarget(detailsTarget)}
+              >
+                <ClipboardCheck size={15} /> Работы
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                onClick={() => openEdit(detailsTarget)}
+              >
+                <Pencil size={15} /> Редактировать
+              </button>
+              <button
+                type="button"
+                className="btn btn--danger btn--sm"
+                onClick={() => {
+                  setDeleteError('')
+                  setDeleteTarget(detailsTarget)
+                }}
+              >
+                <Trash2 size={15} /> Удалить
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
 
       <Modal
         open={Boolean(deleteTarget)}

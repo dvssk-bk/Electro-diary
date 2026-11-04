@@ -6131,9 +6131,9 @@ svg {
 .extra-admin-card {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 8px;
   min-width: 0;
-  padding: 16px;
+  padding: 14px;
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -6164,20 +6164,13 @@ svg {
 .extra-admin-card > p {
   display: -webkit-box;
   overflow: hidden;
-  min-height: 52px;
+  min-height: 44px;
   margin: 0;
   color: var(--ink-soft);
   font-size: 12px;
   line-height: 1.5;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-}
-
-.extra-admin-card > p.is-open {
-  display: block;
-  overflow: visible;
-  min-height: 0;
-  -webkit-line-clamp: unset;
+  -webkit-line-clamp: 2;
 }
 
 .extra-admin-card__meta {
@@ -6205,6 +6198,35 @@ svg {
 
 .extra-admin-card__actions .btn {
   margin-right: auto;
+}
+
+/* Детали задания в полноэкранной модалке */
+.extra-details {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.extra-details__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.extra-details__meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.extra-details__desc {
+  margin: 0;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.65;
+  white-space: pre-wrap;
 }
 
 .icon-btn--danger {
