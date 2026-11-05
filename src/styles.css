@@ -6655,6 +6655,12 @@ svg {
   background: #f8e2d1;
 }
 
+.extra-leaderboard__avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
 .extra-leaderboard__student {
   display: flex;
   flex: 1;
@@ -6663,12 +6669,14 @@ svg {
 }
 
 .extra-leaderboard__student strong {
+  display: -webkit-box;
   overflow: hidden;
   color: var(--ink);
   font-size: 11.5px;
   line-height: 1.3;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .extra-leaderboard__student small {

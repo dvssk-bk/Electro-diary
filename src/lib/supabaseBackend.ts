@@ -1929,13 +1929,30 @@ export const supabaseBackend: Backend = {
       await requireProfile()
       const { data, error } = await client()
         .from('extra_leaderboard')
-        .select('student_id, full_name, group_name, total_points, graded_count')
+        .select(
+          'student_id, full_name, group_name, avatar_path, avatar_frame, total_points, graded_count',
+        )
         .order('total_points', { ascending: false })
         .order('graded_count', { ascending: false })
         .order('full_name')
         .limit(10)
       if (error) throw new Error(error.message)
-      return (data ?? []) as ExtraLeaderboardEntry[]
+      return (data ?? []).map((row) => {
+        const { avatar_path, avatar_frame, ...rest } = row as unknown as {
+          student_id: string
+          full_name: string
+          group_name: string | null
+          avatar_path: string | null
+          avatar_frame: string | null
+          total_points: number
+          graded_count: number
+        }
+        return {
+          ...rest,
+          avatar_url: avatarPublicUrl(avatar_path),
+          avatar_frame,
+        }
+      })
     },
   },
 

@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { ChevronRight, Trophy, Users } from 'lucide-react'
 import type { ExtraLeaderboardEntry } from '../lib/types'
 import { plural } from '../lib/format'
+import { Avatar } from './Avatar'
 import { EmptyState, Spinner } from './Feedback'
 
 interface ExtraLeaderboardProps {
@@ -48,6 +49,9 @@ export function ExtraLeaderboard({
                 aria-label={`Открыть профиль: ${entry.full_name}`}
               >
                 <span className={`extra-rank extra-rank--${index + 1}`}>{index + 1}</span>
+                <span className="extra-leaderboard__avatar">
+                  <Avatar profile={entry} size="sm" />
+                </span>
                 <span className="extra-leaderboard__student">
                   <strong>{entry.full_name}</strong>
                   <small>

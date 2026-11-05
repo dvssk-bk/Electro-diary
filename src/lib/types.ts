@@ -249,6 +249,8 @@ export interface ExtraLeaderboardEntry {
   student_id: string
   full_name: string
   group_name: string | null
+  avatar_url?: string | null
+  avatar_frame?: string | null
   total_points: number
   graded_count: number
 }

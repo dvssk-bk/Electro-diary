@@ -384,6 +384,8 @@ function buildExtraLeaderboard(db: ReturnType<typeof loadDb>): ExtraLeaderboardE
       student_id: student.id,
       full_name: student.full_name,
       group_name: student.group_name,
+      avatar_url: student.avatar_url ?? null,
+      avatar_frame: student.avatar_frame ?? null,
       total_points: 0,
       graded_count: 0,
     }
