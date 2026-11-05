@@ -498,31 +498,44 @@ export function AdminExtraPage() {
       <Modal
         open={Boolean(detailsTarget)}
         onClose={() => setDetailsTarget(null)}
-        title={detailsTarget ? `Задание · ${detailsTarget.title}` : 'Задание'}
+        title={detailsTarget ? detailsTarget.title : 'Задание'}
         subtitle="Общее задание без привязки к дисциплине"
         size="full"
+        className="extra-details-modal"
       >
         {detailsTarget ? (
           <div className="extra-details">
-            <div className="extra-details__meta">
-              <span>
-                <Users size={14} />{' '}
-                {(statsByAssignment.get(detailsTarget.id)?.total ?? 0)}{' '}
-                {plural(statsByAssignment.get(detailsTarget.id)?.total ?? 0, ['сдача', 'сдачи', 'сдач'])}
-              </span>
-              <span>
-                <CheckCircle2 size={14} /> {statsByAssignment.get(detailsTarget.id)?.graded ?? 0}{' '}
-                оценено
-              </span>
-              <span>
-                <Clock3 size={14} />{' '}
-                {detailsTarget.due_at ? `до ${formatDateTime(detailsTarget.due_at)}` : 'без дедлайна'}
-              </span>
+            <div className="extra-details__stats">
+              <div className="extra-details__stat">
+                <span className="extra-details__stat-label">
+                  <Users size={14} /> Сдач
+                </span>
+                <strong>{statsByAssignment.get(detailsTarget.id)?.total ?? 0}</strong>
+              </div>
+              <div className="extra-details__stat">
+                <span className="extra-details__stat-label">
+                  <CheckCircle2 size={14} /> Оценено
+                </span>
+                <strong>{statsByAssignment.get(detailsTarget.id)?.graded ?? 0}</strong>
+              </div>
+              <div className="extra-details__stat">
+                <span className="extra-details__stat-label">
+                  <Clock3 size={14} /> Дедлайн
+                </span>
+                <strong className="extra-details__stat-value">
+                  {detailsTarget.due_at
+                    ? formatDateTime(detailsTarget.due_at)
+                    : 'без дедлайна'}
+                </strong>
+              </div>
             </div>
-            <p className="extra-details__desc">
-              {detailsTarget.description?.trim() || 'Описание не добавлено.'}
-            </p>
-            <div className="modal-actions">
+            <section className="extra-details__section">
+              <h3 className="extra-details__heading">Описание задания</h3>
+              <p className="extra-details__desc">
+                {detailsTarget.description?.trim() || 'Описание не добавлено.'}
+              </p>
+            </section>
+            <div className="extra-details__actions">
               <button
                 type="button"
                 className="btn btn--secondary btn--sm"

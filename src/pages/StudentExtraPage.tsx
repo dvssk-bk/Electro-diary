@@ -85,6 +85,13 @@ export function StudentExtraPage() {
   const detailsGraded = detailsSubmission?.grade != null
   const detailsOverdue =
     detailsTarget != null && !detailsSubmission && isOverdue(detailsTarget.due_at)
+  const detailsState = detailsGraded
+    ? 'graded'
+    : detailsSubmission
+      ? 'sent'
+      : detailsOverdue
+        ? 'revise'
+        : 'todo'
 
   return (
     <AppShell role="student">
@@ -261,12 +268,58 @@ export function StudentExtraPage() {
       <Modal
         open={Boolean(detailsTarget)}
         onClose={() => setDetailsTarget(null)}
-        title={detailsTarget ? `Задание · ${detailsTarget.title}` : 'Задание'}
+        title={detailsTarget ? detailsTarget.title : 'Задание'}
         subtitle="Доп. задание для всех групп · оценивание 0–100"
         size="full"
+        className="extra-details-modal"
       >
         {detailsTarget ? (
           <div className="extra-details">
+            <div
+              className={`extra-details__banner extra-details__banner--${detailsState}`}
+            >
+              <div className="extra-details__banner-icon">
+                {detailsGraded ? (
+                  <CheckCircle2 size={20} />
+                ) : detailsSubmission ? (
+                  <Clock3 size={20} />
+                ) : detailsOverdue ? (
+                  <TriangleAlert size={20} />
+                ) : (
+                  <FileUp size={20} />
+                )}
+              </div>
+              <div className="extra-details__banner-text">
+                <strong>
+                  {detailsGraded
+                    ? 'Работа проверена'
+                    : detailsSubmission
+                      ? 'Работа на проверке'
+                      : detailsOverdue
+                        ? 'Срок сдачи прошёл'
+                        : 'Работа ещё не сдана'}
+                </strong>
+                <span>
+                  {detailsGraded
+                    ? `Ваш результат — ${detailsSubmission?.grade ?? 0} из 100 баллов.`
+                    : detailsSubmission
+                      ? 'Преподаватель проверит её и выставит баллы.'
+                      : detailsOverdue
+                        ? 'Работа не сдана. Отправьте файл, если преподаватель ещё принимает работы.'
+                        : 'Прикрепите файл, пока не истёк срок сдачи.'}
+                </span>
+              </div>
+              {detailsGraded ? (
+                <div className="extra-details__banner-side">
+                  <GradeBadge
+                    grade={detailsSubmission?.grade}
+                    type="points"
+                    size={18}
+                  />
+                </div>
+              ) : null}
+            </div>
+
             <div className="extra-details__meta">
               <span>
                 <Clock3 size={14} />{' '}
@@ -277,41 +330,38 @@ export function StudentExtraPage() {
               <span>
                 <Sparkles size={14} /> 0–100 баллов
               </span>
-              {detailsGraded ? (
-                <span>
-                  <CheckCircle2 size={14} /> Ваш результат:{' '}
-                  <GradeBadge grade={detailsSubmission?.grade} type="points" size={15} />
-                </span>
-              ) : detailsSubmission ? (
-                <span>
-                  <Clock3 size={14} /> На проверке
-                </span>
-              ) : detailsOverdue ? (
-                <span className="deadline-red">
-                  <TriangleAlert size={14} /> Срочно сдать!
-                </span>
-              ) : (
-                <span>
-                  <FileUp size={14} /> Работа ещё не сдана
-                </span>
-              )}
             </div>
-            <p className="extra-details__desc">
-              {detailsTarget.description?.trim() || 'Описание не добавлено.'}
-            </p>
-            {detailsSubmission ? (
-              <div className="assignment-card__file">
-                <FileText size={18} />
-                <div>
-                  <strong>{detailsSubmission.original_name || 'Файл работы'}</strong>
-                  <span>
-                    {formatSize(detailsSubmission.size)} · сдано{' '}
-                    {formatDateTime(detailsSubmission.submitted_at)}
-                  </span>
+
+            <section className="extra-details__section">
+              <h3 className="extra-details__heading">Описание задания</h3>
+              <p className="extra-details__desc">
+                {detailsTarget.description?.trim() || 'Описание не добавлено.'}
+              </p>
+            </section>
+
+            <section className="extra-details__section">
+              <h3 className="extra-details__heading">Ваша работа</h3>
+              {detailsSubmission ? (
+                <div className="extra-details__work">
+                  <div className="assignment-card__file">
+                    <FileText size={18} />
+                    <div>
+                      <strong>{detailsSubmission.original_name || 'Файл работы'}</strong>
+                      <span>
+                        {formatSize(detailsSubmission.size)} · сдано{' '}
+                        {formatDateTime(detailsSubmission.submitted_at)}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ) : null}
-            <div className="modal-actions">
+              ) : (
+                <div className="extra-details__empty">
+                  <FileUp size={18} /> Файл ещё не прикреплён.
+                </div>
+              )}
+            </section>
+
+            <div className="extra-details__actions">
               {detailsSubmission?.file_path ? (
                 <button
                   type="button"
