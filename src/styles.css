@@ -6378,11 +6378,41 @@ svg {
 }
 
 .extra-student-grid {
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
 }
 
 .extra-student-card {
-  min-height: 250px;
+  min-height: 0;
+  padding: 14px;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.extra-student-card h3 {
+  font-size: 15px;
+}
+
+/* Компактная карточка: описание обрезано до двух строк,
+   полный текст открывается в полноэкранной модалке по клику. */
+.extra-student-card > p {
+  display: -webkit-box;
+  overflow: hidden;
+  min-height: 36px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.extra-student-card .assignment-card__file {
+  padding: 6px 8px;
+}
+
+.extra-student-card .assignment-card__file strong {
+  font-size: 11px;
+}
+
+.extra-student-card .assignment-card__file span {
+  font-size: 9px;
 }
 
 .extra-student-card__status {

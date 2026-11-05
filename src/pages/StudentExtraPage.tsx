@@ -11,6 +11,7 @@ import {
   TriangleAlert,
 } from 'lucide-react'
 import { AppShell } from '../components/AppShell'
+import { Modal } from '../components/Modal'
 import { EmptyState, ErrorBox, Spinner } from '../components/Feedback'
 import { ExtraFileDialog } from '../components/ExtraFileDialog'
 import { ExtraLeaderboard } from '../components/ExtraLeaderboard'
@@ -37,6 +38,7 @@ export function StudentExtraPage() {
   const [submitTarget, setSubmitTarget] = useState<ExtraAssignment | null>(null)
   const [submitExisting, setSubmitExisting] = useState<ExtraSubmission | null>(null)
   const [fileTarget, setFileTarget] = useState<ExtraSubmission | null>(null)
+  const [detailsTarget, setDetailsTarget] = useState<ExtraAssignment | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -76,6 +78,13 @@ export function StudentExtraPage() {
     setSubmitTarget(assignment)
     setSubmitExisting(submissionByAssignment.get(assignment.id) ?? null)
   }
+
+  const detailsSubmission = detailsTarget
+    ? submissionByAssignment.get(detailsTarget.id) ?? null
+    : null
+  const detailsGraded = detailsSubmission?.grade != null
+  const detailsOverdue =
+    detailsTarget != null && !detailsSubmission && isOverdue(detailsTarget.due_at)
 
   return (
     <AppShell role="student">
@@ -152,6 +161,7 @@ export function StudentExtraPage() {
                   <article
                     className={`assignment-card extra-student-card ${statusClass}`}
                     key={assignment.id}
+                    onClick={() => setDetailsTarget(assignment)}
                   >
                     <div className="assignment-card__head">
                       <span className="badge badge--blue">
@@ -202,7 +212,10 @@ export function StudentExtraPage() {
                       )}
                     </div>
 
-                    <div className="assignment-card__actions">
+                    <div
+                      className="assignment-card__actions"
+                      onClick={(event) => event.stopPropagation()}
+                    >
                       {submission?.file_path ? (
                         <button
                           type="button"
@@ -244,6 +257,90 @@ export function StudentExtraPage() {
           />
         </aside>
       </div>
+
+      <Modal
+        open={Boolean(detailsTarget)}
+        onClose={() => setDetailsTarget(null)}
+        title={detailsTarget ? `Задание · ${detailsTarget.title}` : 'Задание'}
+        subtitle="Доп. задание для всех групп · оценивание 0–100"
+        size="full"
+      >
+        {detailsTarget ? (
+          <div className="extra-details">
+            <div className="extra-details__meta">
+              <span>
+                <Clock3 size={14} />{' '}
+                {detailsTarget.due_at
+                  ? `до ${formatDateTime(detailsTarget.due_at)}`
+                  : 'без дедлайна'}
+              </span>
+              <span>
+                <Sparkles size={14} /> 0–100 баллов
+              </span>
+              {detailsGraded ? (
+                <span>
+                  <CheckCircle2 size={14} /> Ваш результат:{' '}
+                  <GradeBadge grade={detailsSubmission?.grade} type="points" size={15} />
+                </span>
+              ) : detailsSubmission ? (
+                <span>
+                  <Clock3 size={14} /> На проверке
+                </span>
+              ) : detailsOverdue ? (
+                <span className="deadline-red">
+                  <TriangleAlert size={14} /> Срочно сдать!
+                </span>
+              ) : (
+                <span>
+                  <FileUp size={14} /> Работа ещё не сдана
+                </span>
+              )}
+            </div>
+            <p className="extra-details__desc">
+              {detailsTarget.description?.trim() || 'Описание не добавлено.'}
+            </p>
+            {detailsSubmission ? (
+              <div className="assignment-card__file">
+                <FileText size={18} />
+                <div>
+                  <strong>{detailsSubmission.original_name || 'Файл работы'}</strong>
+                  <span>
+                    {formatSize(detailsSubmission.size)} · сдано{' '}
+                    {formatDateTime(detailsSubmission.submitted_at)}
+                  </span>
+                </div>
+              </div>
+            ) : null}
+            <div className="modal-actions">
+              {detailsSubmission?.file_path ? (
+                <button
+                  type="button"
+                  className="btn btn--secondary btn--sm"
+                  onClick={() => {
+                    setFileTarget(detailsSubmission)
+                    setDetailsTarget(null)
+                  }}
+                >
+                  <FolderOpen size={15} /> Открыть файл
+                </button>
+              ) : null}
+              {!detailsGraded ? (
+                <button
+                  type="button"
+                  className="btn btn--primary btn--sm"
+                  onClick={() => {
+                    openSubmit(detailsTarget)
+                    setDetailsTarget(null)
+                  }}
+                >
+                  {detailsSubmission ? <Replace size={15} /> : <FileUp size={15} />}
+                  {detailsSubmission ? 'Заменить файл' : 'Сдать работу'}
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </Modal>
 
       <ExtraSubmitDialog
         open={Boolean(submitTarget)}
