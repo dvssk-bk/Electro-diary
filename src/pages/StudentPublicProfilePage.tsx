@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Cake, Mail, Phone, UserRound, Users } from 'lucide-react'
 import { AppShell } from '../components/AppShell'
 import { Avatar } from '../components/Avatar'
@@ -13,6 +13,7 @@ import type { Profile } from '../lib/types'
 
 export function StudentPublicProfilePage() {
   const { studentId } = useParams()
+  const [searchParams] = useSearchParams()
   const { profile } = useAuth()
   const [student, setStudent] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
@@ -49,7 +50,13 @@ export function StudentPublicProfilePage() {
     }
   }, [studentId])
 
-  const backTo = profile?.role === 'admin' ? '/admin/groups' : '/journal'
+  const fromParam = searchParams.get('from')
+  const backTo =
+    fromParam && fromParam.startsWith('/')
+      ? fromParam
+      : profile?.role === 'admin'
+        ? '/admin/groups'
+        : '/journal'
   const isSelf = Boolean(profile && student && profile.id === student.id)
   const parts = splitName(student?.full_name ?? '')
 

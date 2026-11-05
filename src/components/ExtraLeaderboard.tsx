@@ -1,4 +1,5 @@
-import { Trophy, Users } from 'lucide-react'
+import { Link, useLocation } from 'react-router-dom'
+import { ChevronRight, Trophy, Users } from 'lucide-react'
 import type { ExtraLeaderboardEntry } from '../lib/types'
 import { plural } from '../lib/format'
 import { EmptyState, Spinner } from './Feedback'
@@ -14,6 +15,9 @@ export function ExtraLeaderboard({
   loading = false,
   currentStudentId,
 }: ExtraLeaderboardProps) {
+  const location = useLocation()
+  const from = location.pathname
+
   return (
     <section className="extra-leaderboard" aria-labelledby="extra-leaderboard-title">
       <header className="extra-leaderboard__head">
@@ -38,19 +42,26 @@ export function ExtraLeaderboard({
               key={entry.student_id}
               className={entry.student_id === currentStudentId ? 'is-me' : ''}
             >
-              <span className={`extra-rank extra-rank--${index + 1}`}>{index + 1}</span>
-              <span className="extra-leaderboard__student">
-                <strong>{entry.full_name}</strong>
-                <small>
-                  <Users size={11} /> группа {entry.group_name || 'не указана'}
-                </small>
-              </span>
-              <span className="extra-leaderboard__score">
-                <strong>{entry.total_points}</strong>
-                <small>
-                  {plural(entry.graded_count, ['работа', 'работы', 'работ'])}
-                </small>
-              </span>
+              <Link
+                to={`/student/${entry.student_id}?from=${encodeURIComponent(from)}`}
+                className="extra-leaderboard__row"
+                aria-label={`Открыть профиль: ${entry.full_name}`}
+              >
+                <span className={`extra-rank extra-rank--${index + 1}`}>{index + 1}</span>
+                <span className="extra-leaderboard__student">
+                  <strong>{entry.full_name}</strong>
+                  <small>
+                    <Users size={11} /> группа {entry.group_name || 'не указана'}
+                  </small>
+                </span>
+                <span className="extra-leaderboard__score">
+                  <strong>{entry.total_points}</strong>
+                  <small>
+                    {plural(entry.graded_count, ['работа', 'работы', 'работ'])}
+                  </small>
+                </span>
+                <ChevronRight size={15} className="extra-leaderboard__chevron" />
+              </Link>
             </li>
           ))}
         </ol>

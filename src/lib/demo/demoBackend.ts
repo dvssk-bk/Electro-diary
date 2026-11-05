@@ -633,15 +633,14 @@ export const demoBackend: Backend = {
       return user ? coerceProfile(user.profile) : null
     },
     async getStudent(id: string) {
-      const session = requireSession()
+      requireSession()
       const db = loadDb()
       const user = db.users.find(
         (item) => item.profile.id === id && item.profile.role === 'student',
       )
       if (!user) return null
-      const isSelf = session.id === id
-      const isGroupmate = session.group_name === user.profile.group_name
-      if (session.role !== 'admin' && !isSelf && !isGroupmate) return null
+      // Профиль доступен всем авторизованным: из рейтинга «Топ 10»
+      // можно открыть студента из любой группы.
       return coerceProfile(user.profile)
     },
     async updateFullName(fullName: string) {
