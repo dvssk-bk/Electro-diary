@@ -1498,6 +1498,7 @@ export const demoBackend: Backend = {
         existing.grade = null
         existing.status = 'submitted'
         existing.reviewed_at = null
+        existing.file_deleted_at = null
         existing.updated_at = timestamp
         submission = existing
         if (oldPath) await deleteDemoFile(oldPath)
@@ -1541,10 +1542,18 @@ export const demoBackend: Backend = {
       const db = loadDb()
       const submission = db.extraSubmissions.find((item) => item.id === submissionId)
       if (!submission) throw new Error('Работа не найдена')
+      const timestamp = new Date().toISOString()
       submission.grade = grade
       submission.status = grade != null ? 'reviewed' : 'submitted'
-      submission.reviewed_at = grade != null ? new Date().toISOString() : null
-      submission.updated_at = new Date().toISOString()
+      submission.reviewed_at = grade != null ? timestamp : null
+      if (grade != null && submission.file_path) {
+        // Оценённая работа: файл удаляем, но результат и метаданные
+        // (имя, размер, дата сдачи) остаются в строке.
+        await deleteDemoFile(submission.file_path)
+        submission.file_path = null
+        submission.file_deleted_at = timestamp
+      }
+      submission.updated_at = timestamp
       saveDb()
       return { ...submission }
     },

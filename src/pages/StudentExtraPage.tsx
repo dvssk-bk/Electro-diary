@@ -4,6 +4,7 @@ import {
   Clock3,
   FileText,
   FileUp,
+  FileX,
   FolderOpen,
   RefreshCw,
   Replace,
@@ -184,13 +185,26 @@ export function StudentExtraPage() {
                     <p>{assignment.description || 'Описание не добавлено.'}</p>
 
                     {submission ? (
-                      <div className="assignment-card__file">
-                        <FileText size={18} />
+                      <div
+                        className={`assignment-card__file ${
+                          submission.file_deleted_at
+                            ? 'assignment-card__file--deleted'
+                            : ''
+                        }`}
+                      >
+                        {submission.file_deleted_at ? (
+                          <FileX size={18} />
+                        ) : (
+                          <FileText size={18} />
+                        )}
                         <div>
                           <strong>{submission.original_name || 'Файл работы'}</strong>
                           <span>
-                            {formatSize(submission.size)} · сдано{' '}
-                            {formatDateTime(submission.submitted_at)}
+                            {submission.file_deleted_at
+                              ? 'файл удалён после проверки · данные работы сохранены'
+                              : `${formatSize(submission.size)} · сдано ${formatDateTime(
+                                  submission.submitted_at,
+                                )}`}
                           </span>
                         </div>
                       </div>
@@ -343,13 +357,26 @@ export function StudentExtraPage() {
               <h3 className="extra-details__heading">Ваша работа</h3>
               {detailsSubmission ? (
                 <div className="extra-details__work">
-                  <div className="assignment-card__file">
-                    <FileText size={18} />
+                  <div
+                    className={`assignment-card__file ${
+                      detailsSubmission.file_deleted_at
+                        ? 'assignment-card__file--deleted'
+                        : ''
+                    }`}
+                  >
+                    {detailsSubmission.file_deleted_at ? (
+                      <FileX size={18} />
+                    ) : (
+                      <FileText size={18} />
+                    )}
                     <div>
                       <strong>{detailsSubmission.original_name || 'Файл работы'}</strong>
                       <span>
-                        {formatSize(detailsSubmission.size)} · сдано{' '}
-                        {formatDateTime(detailsSubmission.submitted_at)}
+                        {detailsSubmission.file_deleted_at
+                          ? 'файл удалён после проверки · данные работы сохранены'
+                          : `${formatSize(detailsSubmission.size)} · сдано ${formatDateTime(
+                              detailsSubmission.submitted_at,
+                            )}`}
                       </span>
                     </div>
                   </div>

@@ -233,6 +233,8 @@ export interface ExtraSubmission {
   grade: number | null
   status: ExtraSubmissionStatus
   reviewed_at: string | null
+  /** Время удаления файла после проверки; оценка и имя файла сохраняются. */
+  file_deleted_at?: string | null
   updated_at: string
 }
 

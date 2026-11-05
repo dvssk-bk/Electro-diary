@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   ClipboardCheck,
   Clock3,
+  FileX,
   FolderOpen,
   Loader2,
   Pencil,
@@ -176,12 +177,21 @@ function ExtraWorksDialog({ open, assignment, onClose, onChanged }: ExtraWorksDi
                           <FolderOpen size={15} />
                           {row.submission.original_name || 'файл'}
                         </button>
+                      ) : row.submission.file_deleted_at ? (
+                        <span className="works-file works-file--deleted">
+                          <FileX size={15} />
+                          {row.submission.original_name || 'файл'}
+                        </span>
                       ) : (
                         <span className="works-file">
                           <FolderOpen size={15} /> без файла
                         </span>
                       )}
-                      <span className="muted">{formatSize(row.submission.size)}</span>
+                      <span className="muted">
+                        {row.submission.file_deleted_at
+                          ? 'удалён после проверки'
+                          : formatSize(row.submission.size)}
+                      </span>
                     </td>
                     <td>
                       <span>{formatDateTime(row.submission.submitted_at)}</span>

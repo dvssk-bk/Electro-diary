@@ -1845,6 +1845,7 @@ export const supabaseBackend: Backend = {
         grade: null,
         status: 'submitted' as const,
         reviewed_at: null,
+        file_deleted_at: null,
         updated_at: timestamp,
       }
 
@@ -1911,14 +1912,42 @@ export const supabaseBackend: Backend = {
         throw new Error('Баллы должны быть целым числом от 0 до 100')
       }
       const now = new Date().toISOString()
+      const { data: current, error: currentError } = await client()
+        .from('extra_submissions')
+        .select('file_path')
+        .eq('id', submissionId)
+        .maybeSingle()
+      if (currentError) throw new Error(currentError.message)
+      if (!current) throw new Error('Работа не найдена')
+
+      const filePath =
+        grade != null
+          ? ((current as { file_path: string | null }).file_path ?? null)
+          : null
+
+      // Файл проверенной работы больше не нужен: удаляем его из хранилища,
+      // но оставляем в строке оценку, имя файла, размер и дату сдачи.
+      if (filePath) {
+        const { error: storageError } = await client()
+          .storage.from('extra_submissions')
+          .remove([filePath])
+        if (storageError) throw new Error(storageError.message)
+      }
+
+      const patch: Record<string, unknown> = {
+        grade,
+        status: grade != null ? 'reviewed' : 'submitted',
+        reviewed_at: grade != null ? now : null,
+        updated_at: now,
+      }
+      if (filePath) {
+        patch.file_path = null
+        patch.file_deleted_at = now
+      }
+
       const { data, error } = await client()
         .from('extra_submissions')
-        .update({
-          grade,
-          status: grade != null ? 'reviewed' : 'submitted',
-          reviewed_at: grade != null ? now : null,
-          updated_at: now,
-        })
+        .update(patch)
         .eq('id', submissionId)
         .select('*')
         .single()
