@@ -342,8 +342,8 @@ export function AdminLoginPage() {
           <div className="form">
             <p className="form-note">
               Пароли в Supabase хранятся как хеш. Владелец дневника может задать новый
-              пароль в Supabase → Authentication → Users, либо администратор — в разделе
-              «Группы» → «Сброс пароля» для студента.
+              пароль через Edge Function «reset-password» (Admin API Supabase), а
+              администратор — в разделе «Группы» → «Сброс пароля» для студента.
             </p>
             {loginValue.trim() ? (
               <>
