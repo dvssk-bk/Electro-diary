@@ -13,6 +13,7 @@ import type {
   NewAssignment,
   NewDiscipline,
   NewExtraAssignment,
+  PasswordResetResult,
   Profile,
   ProfileInput,
   StudentCredentials,
@@ -524,6 +525,32 @@ export const supabaseBackend: Backend = {
       if (!login) throw new Error('Сервис регистрации не вернул логин')
       const profile = await supabaseBackend.auth.signIn(login, password)
       return { profile, login }
+    },
+    async resetStudentPassword(student, newPassword): Promise<PasswordResetResult> {
+      await requireAdmin()
+      const identifier = student.trim()
+      if (!identifier) throw new Error('Введите логин студента')
+      if (newPassword) {
+        const passwordError = validatePassword(newPassword)
+        if (passwordError) throw new Error(passwordError)
+      }
+      const { data, error } = await client().functions.invoke('reset-password', {
+        body: { login: identifier, newPassword: newPassword || null },
+      })
+      if (error) {
+        let message = await edgeFunctionError(error, 'Не удалось сбросить пароль')
+        if (/Failed to send a request|not found|404/i.test(message)) {
+          message =
+            'Сервис сброса пароля не задеплоен. Задеплойте Edge Function «reset-password» (см. README).'
+        }
+        throw new Error(message)
+      }
+      if (data?.error) throw new Error(data.error as string)
+      const result = data as PasswordResetResult
+      if (!result?.login || !result.password) {
+        throw new Error('Сервис сброса пароля вернул некорректный ответ')
+      }
+      return result
     },
   },
 

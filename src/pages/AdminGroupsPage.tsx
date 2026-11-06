@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
+  Check,
+  Copy,
   GraduationCap,
+  KeyRound,
   Loader2,
   Pencil,
   Plus,
@@ -16,8 +19,9 @@ import { EmptyState, ErrorBox, Spinner } from '../components/Feedback'
 import { useDisciplines } from '../context/DisciplineContext'
 import { useToast } from '../context/ToastContext'
 import { backend } from '../lib/api'
+import { copyText } from '../lib/clipboard'
 import { formatDate, plural } from '../lib/format'
-import type { Group, Profile } from '../lib/types'
+import type { Group, PasswordResetResult, Profile } from '../lib/types'
 
 interface GroupRow {
   group: Group
@@ -44,6 +48,14 @@ export function AdminGroupsPage() {
   const [studentDeleteTarget, setStudentDeleteTarget] = useState<Profile | null>(null)
   const [studentDeleteBusy, setStudentDeleteBusy] = useState(false)
   const [studentDeleteError, setStudentDeleteError] = useState('')
+  const [resetOpen, setResetOpen] = useState(false)
+  const [resetTarget, setResetTarget] = useState<Profile | null>(null)
+  const [resetLogin, setResetLogin] = useState('')
+  const [resetPassword, setResetPassword] = useState('')
+  const [resetBusy, setResetBusy] = useState(false)
+  const [resetError, setResetError] = useState('')
+  const [resetResult, setResetResult] = useState<PasswordResetResult | null>(null)
+  const [resetCopied, setResetCopied] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -171,6 +183,58 @@ export function AdminGroupsPage() {
     }
   }
 
+  const openReset = (login = '', target: Profile | null = null) => {
+    setResetTarget(target)
+    setResetLogin(login)
+    setResetPassword('')
+    setResetError('')
+    setResetResult(null)
+    setResetCopied(false)
+    setResetOpen(true)
+  }
+
+  const closeReset = () => {
+    if (resetBusy) return
+    setResetOpen(false)
+  }
+
+  const submitReset = async (event: FormEvent) => {
+    event.preventDefault()
+    setResetError('')
+    setResetCopied(false)
+    const identifier = resetTarget?.id ?? resetLogin.trim()
+    if (!identifier) {
+      setResetError('Введите логин студента')
+      return
+    }
+    if (resetPassword && resetPassword.length < 8) {
+      setResetError('Новый пароль должен содержать минимум 8 символов')
+      return
+    }
+    setResetBusy(true)
+    try {
+      const result = await backend.auth.resetStudentPassword(
+        identifier,
+        resetPassword || undefined,
+      )
+      setResetResult(result)
+      toast.success(`Пароль студента ${result.fullName} изменён`)
+    } catch (err) {
+      setResetError((err as Error).message)
+    } finally {
+      setResetBusy(false)
+    }
+  }
+
+  const copyReset = async () => {
+    if (!resetResult) return
+    const ok = await copyText(
+      `Логин: ${resetResult.login}\nПароль: ${resetResult.password}`,
+    )
+    setResetCopied(ok)
+    if (ok) window.setTimeout(() => setResetCopied(false), 2500)
+  }
+
   const totalStudents = rows.reduce((sum, row) => sum + row.students.length, 0)
 
   return (
@@ -186,6 +250,15 @@ export function AdminGroupsPage() {
           </p>
         </div>
         <div className="page-head__actions">
+          <button
+            type="button"
+            className="btn btn--ghost btn--sm"
+            onClick={() => openReset()}
+            title="Сбросить пароль студента"
+            data-testid="reset-password"
+          >
+            <KeyRound size={16} /> Сброс пароля
+          </button>
           <button
             type="button"
             className="btn btn--ghost btn--sm"
@@ -449,6 +522,16 @@ export function AdminGroupsPage() {
                 </button>
                 <button
                   type="button"
+                  className="icon-btn"
+                  title="Сбросить пароль"
+                  aria-label={`Сбросить пароль студента ${student.full_name}`}
+                  onClick={() => openReset('', student)}
+                  data-testid={`reset-student-${student.id}`}
+                >
+                  <KeyRound size={16} />
+                </button>
+                <button
+                  type="button"
                   className="icon-btn icon-btn--danger"
                   title="Удалить студента"
                   aria-label={`Удалить студента ${student.full_name}`}
@@ -509,6 +592,107 @@ export function AdminGroupsPage() {
             </div>
           </div>
         ) : null}
+      </Modal>
+
+      <Modal
+        open={resetOpen}
+        onClose={closeReset}
+        title="Сброс пароля студента"
+        subtitle="Новый пароль показывается один раз — передайте его студенту"
+        size="sm"
+      >
+        {resetResult ? (
+          <div className="form">
+            <div className="credentials">
+              <div className="credentials__icon">
+                <Check size={26} />
+              </div>
+              <h3>Пароль изменён</h3>
+              <p>
+                Студент <strong>{resetResult.fullName}</strong> может войти с новым паролем.
+              </p>
+              <div className="credentials__rows">
+                <div>
+                  <span>Логин</span>
+                  <code>{resetResult.login}</code>
+                </div>
+                <div>
+                  <span>Новый пароль</span>
+                  <code data-testid="reset-password-value">{resetResult.password}</code>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn--primary btn--block"
+                onClick={() => void copyReset()}
+              >
+                {resetCopied ? <Check size={17} /> : <Copy size={17} />}
+                {resetCopied ? 'Скопировано' : 'Скопировать логин и пароль'}
+              </button>
+            </div>
+            <p className="form-note">
+              Если студент поменяет пароль в профиле, этот временный пароль перестанет
+              действовать.
+            </p>
+            <div className="modal-actions">
+              <button type="button" className="btn btn--ghost" onClick={closeReset}>
+                Закрыть
+              </button>
+              <button
+                type="button"
+                className="btn btn--secondary"
+                onClick={() => openReset()}
+              >
+                <KeyRound size={16} /> Другой студент
+              </button>
+            </div>
+          </div>
+        ) : (
+          <form className="form" onSubmit={submitReset}>
+            {resetError ? <ErrorBox>{resetError}</ErrorBox> : null}
+            {resetTarget ? (
+              <p className="form-note">
+                Студент: <strong>{resetTarget.full_name}</strong>
+                {resetTarget.group_name ? ` · группа ${resetTarget.group_name}` : ''}
+              </p>
+            ) : (
+              <label className="field">
+                <span>Логин студента</span>
+                <input
+                  value={resetLogin}
+                  onChange={(event) => setResetLogin(event.target.value)}
+                  placeholder="например, botnar4821"
+                  autoFocus
+                  data-testid="reset-login-input"
+                />
+              </label>
+            )}
+            <label className="field">
+              <span>Новый пароль (необязательно)</span>
+              <input
+                value={resetPassword}
+                onChange={(event) => setResetPassword(event.target.value)}
+                placeholder="оставьте пустым — сгенерируем"
+                autoComplete="new-password"
+                maxLength={72}
+              />
+            </label>
+            <p className="form-note">
+              Пароли в Supabase хранятся в виде хеша, поэтому посмотреть старый нельзя.
+              Можно только задать новый. Если оставить поле пустым, будет создан
+              временный пароль из 10 символов.
+            </p>
+            <div className="modal-actions">
+              <button type="button" className="btn btn--ghost" onClick={closeReset} disabled={resetBusy}>
+                Отмена
+              </button>
+              <button type="submit" className="btn btn--primary" disabled={resetBusy} data-testid="reset-submit">
+                {resetBusy ? <Loader2 className="spin" size={17} /> : <KeyRound size={17} />}
+                {resetBusy ? 'Меняем…' : 'Сбросить пароль'}
+              </button>
+            </div>
+          </form>
+        )}
       </Modal>
     </AppShell>
   )

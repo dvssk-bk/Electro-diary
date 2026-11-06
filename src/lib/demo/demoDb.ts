@@ -6,6 +6,7 @@ import type {
   ExtraAssignment,
   ExtraSubmission,
   Group,
+  GroupViewer,
   Profile,
   Submission,
   SubmissionVersion,
@@ -32,6 +33,7 @@ export interface DemoDb {
   annotations: Annotation[]
   extraAssignments: ExtraAssignment[]
   extraSubmissions: ExtraSubmission[]
+  groupViewers: GroupViewer[]
   sessionLogin: string | null
 }
 
@@ -62,6 +64,7 @@ export function createSeedDb(): DemoDb {
     annotations: [],
     extraAssignments: [],
     extraSubmissions: [],
+    groupViewers: [],
     sessionLogin: null,
   }
 }
@@ -83,6 +86,7 @@ export function loadDb(): DemoDb {
         parsed.extraAssignments ??= []
         parsed.extraSubmissions ??= []
         parsed.assignmentAttachments ??= []
+        parsed.groupViewers ??= []
         for (const user of parsed.users) {
           user.profile.birthday_md ??= null
           user.profile.avatar_frame ??= null
@@ -97,6 +101,7 @@ export function loadDb(): DemoDb {
         parsed.extraAssignments ??= []
         parsed.extraSubmissions ??= []
         parsed.assignmentAttachments ??= []
+        parsed.groupViewers ??= []
         cache = parsed
         return cache
       }

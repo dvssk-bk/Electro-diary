@@ -2,6 +2,8 @@ import { useState, type FormEvent } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft,
+  Check,
+  Copy,
   GraduationCap,
   KeyRound,
   Loader2,
@@ -12,6 +14,8 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { ErrorBox } from '../components/Feedback'
+import { Modal } from '../components/Modal'
+import { copyText } from '../lib/clipboard'
 
 type Tab = 'login' | 'register'
 
@@ -28,6 +32,8 @@ export function AdminLoginPage() {
   const [error, setError] = useState('')
   const [pendingRegistration, setPendingRegistration] = useState(false)
   const [registered, setRegistered] = useState<{ login: string; fullName: string } | null>(null)
+  const [forgotOpen, setForgotOpen] = useState(false)
+  const [forgotCopied, setForgotCopied] = useState(false)
 
   if (loading) {
     return (
@@ -95,6 +101,12 @@ export function AdminLoginPage() {
   const switchTab = (next: Tab) => {
     setTab(next)
     setError('')
+  }
+
+  const copyForgotLogin = async () => {
+    const ok = await copyText(loginValue.trim())
+    setForgotCopied(ok)
+    if (ok) window.setTimeout(() => setForgotCopied(false), 2500)
   }
 
   return (
@@ -233,6 +245,17 @@ export function AdminLoginPage() {
                   {busy ? <Loader2 className="spin" size={18} /> : <ShieldCheck size={18} />}
                   {busy ? 'Проверяем…' : 'Войти в кабинет'}
                 </button>
+                <button
+                  type="button"
+                  className="subtle-link auth-forgot"
+                  onClick={() => {
+                    setForgotCopied(false)
+                    setForgotOpen(true)
+                  }}
+                  data-testid="admin-forgot-password"
+                >
+                  <KeyRound size={14} /> Забыл пароль
+                </button>
               </form>
             ) : (
               <form className="form" onSubmit={handleRegister}>
@@ -308,6 +331,50 @@ export function AdminLoginPage() {
           </Link>
           <span className="muted">Только для преподавателей</span>
         </div>
+
+        <Modal
+          open={forgotOpen}
+          onClose={() => setForgotOpen(false)}
+          title="Забыли пароль?"
+          subtitle="Пароль хранится в защищённом виде — показать старый нельзя"
+          size="sm"
+        >
+          <div className="form">
+            <p className="form-note">
+              Пароли в Supabase хранятся как хеш. Владелец дневника может задать новый
+              пароль в Supabase → Authentication → Users, либо администратор — в разделе
+              «Группы» → «Сброс пароля» для студента.
+            </p>
+            {loginValue.trim() ? (
+              <>
+                <p className="form-note">Ваш логин:</p>
+                <div className="credentials__rows">
+                  <div>
+                    <span>Логин</span>
+                    <code>{loginValue.trim()}</code>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn--secondary btn--block"
+                  onClick={() => void copyForgotLogin()}
+                >
+                  {forgotCopied ? <Check size={17} /> : <Copy size={17} />}
+                  {forgotCopied ? 'Скопировано' : 'Скопировать логин'}
+                </button>
+              </>
+            ) : null}
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => setForgotOpen(false)}
+              >
+                Понятно
+              </button>
+            </div>
+          </div>
+        </Modal>
       </div>
     </div>
   )

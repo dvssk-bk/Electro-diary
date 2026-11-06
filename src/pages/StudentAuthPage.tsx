@@ -22,6 +22,7 @@ import { backend, isDemoMode } from '../lib/api'
 import { copyText } from '../lib/clipboard'
 import type { Group, StudentCredentials } from '../lib/types'
 import { ErrorBox } from '../components/Feedback'
+import { Modal } from '../components/Modal'
 
 type Tab = 'login' | 'register'
 
@@ -40,6 +41,8 @@ export function StudentAuthPage() {
   const [error, setError] = useState('')
   const [credentials, setCredentials] = useState<StudentCredentials | null>(null)
   const [copied, setCopied] = useState(false)
+  const [forgotOpen, setForgotOpen] = useState(false)
+  const [forgotCopied, setForgotCopied] = useState(false)
 
   useEffect(() => {
     backend.groups
@@ -122,6 +125,12 @@ export function StudentAuthPage() {
     const ok = await copyText(text)
     setCopied(ok)
     window.setTimeout(() => setCopied(false), 2500)
+  }
+
+  const copyForgotLogin = async () => {
+    const ok = await copyText(loginValue.trim())
+    setForgotCopied(ok)
+    if (ok) window.setTimeout(() => setForgotCopied(false), 2500)
   }
 
   return (
@@ -282,6 +291,7 @@ export function StudentAuthPage() {
               {error ? <ErrorBox>{error}</ErrorBox> : null}
 
               {tab === 'login' ? (
+                <>
                 <form className="form" onSubmit={handleLogin}>
                   <label className="field">
                     <span>Логин</span>
@@ -330,6 +340,18 @@ export function StudentAuthPage() {
                     {busy ? 'Входим…' : 'Войти в дневник'}
                   </button>
                 </form>
+                <button
+                  type="button"
+                  className="subtle-link auth-forgot"
+                  onClick={() => {
+                    setForgotCopied(false)
+                    setForgotOpen(true)
+                  }}
+                  data-testid="forgot-password"
+                >
+                  <KeyRound size={14} /> Забыл пароль
+                </button>
+                </>
               ) : (
                 <form className="form" onSubmit={handleRegister}>
                   <label className="field">
@@ -397,6 +419,55 @@ export function StudentAuthPage() {
           Персональные данные видны только вашей группе и преподавателю.
         </p>
       </section>
+
+      <Modal
+        open={forgotOpen}
+        onClose={() => setForgotOpen(false)}
+        title="Забыли пароль?"
+        subtitle="Пароль хранится в защищённом виде — показать старый нельзя"
+        size="sm"
+      >
+        <div className="form">
+          <p className="form-note">
+            В Supabase пароль хранится как хеш. Ни студент, ни преподаватель не может
+            посмотреть его. Администратор дневника может задать новый пароль — после
+            этого вы войдёте с ним.
+          </p>
+          {loginValue.trim() ? (
+            <>
+              <p className="form-note">Передайте администратору свой логин:</p>
+              <div className="credentials__rows">
+                <div>
+                  <span>Ваш логин</span>
+                  <code>{loginValue.trim()}</code>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn--secondary btn--block"
+                onClick={() => void copyForgotLogin()}
+              >
+                {forgotCopied ? <Check size={17} /> : <Copy size={17} />}
+                {forgotCopied ? 'Скопировано' : 'Скопировать логин'}
+              </button>
+            </>
+          ) : (
+            <p className="form-note">
+              Сначала введите логин в поле входа — мы покажем его здесь, чтобы вы могли
+              отправить администратору.
+            </p>
+          )}
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={() => setForgotOpen(false)}
+            >
+              Понятно
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

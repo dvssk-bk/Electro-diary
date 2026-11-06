@@ -130,6 +130,12 @@ export function StudentAssignmentsPage() {
     }
   }, [reviewId, submissions, assignments, profile, active])
 
+  // Студент может быть granted-доступ к чужой группе: тогда задания группы
+  // показываются для просмотра, но сдачу и замену выполнить нельзя.
+  const isViewingOtherGroup = Boolean(
+    active && profile?.group_name && active.group_name !== profile.group_name,
+  )
+
   if (!profile?.group_name) {
     return (
       <AppShell role="student">
@@ -334,7 +340,11 @@ export function StudentAssignmentsPage() {
                 ) : null}
 
                 <footer className="assignment-card__actions">
-                  {submission ? (
+                  {isViewingOtherGroup ? (
+                    <span className="assignment-card__marks">
+                      Просмотр группы — сдача недоступна
+                    </span>
+                  ) : submission ? (
                     <>
                       <button
                         type="button"

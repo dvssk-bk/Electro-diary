@@ -45,6 +45,14 @@ export interface Group {
   created_at: string
 }
 
+/** Доступ к групповому журналу, выданный администратором. */
+export interface GroupViewer {
+  group_name: string
+  user_id: string
+  created_by: string | null
+  created_at: string
+}
+
 export interface DisciplineStats {
   /**
    * Проверенные задания: у студента — с оценкой, у преподавателя — все сдачи
@@ -172,6 +180,13 @@ export interface StudentCredentials {
   password: string
   fullName?: string
   groupName?: string
+}
+
+/** Результат сброса пароля администратором: новый пароль показывается один раз. */
+export interface PasswordResetResult {
+  login: string
+  password: string
+  fullName: string
 }
 
 export interface TeacherRegistration {

@@ -12,6 +12,7 @@ import type {
   NewAssignment,
   NewDiscipline,
   NewExtraAssignment,
+  PasswordResetResult,
   Profile,
   ProfileInput,
   StudentCredentials,
@@ -127,9 +128,17 @@ function findDiscipline(db: ReturnType<typeof loadDb>, id: string): Discipline |
   return db.disciplines.find((discipline) => discipline.id === id) ?? null
 }
 
-function canOpenDiscipline(profile: Profile, discipline: Discipline): boolean {
+function canOpenDiscipline(
+  db: ReturnType<typeof loadDb>,
+  profile: Profile,
+  discipline: Discipline,
+): boolean {
   if (profile.role === 'admin') return discipline.teacher_id === profile.id
-  return discipline.group_name === profile.group_name
+  const hasViewerAccess = db.groupViewers.some(
+    (viewer) =>
+      viewer.group_name === discipline.group_name && viewer.user_id === profile.id,
+  )
+  return discipline.group_name === profile.group_name || hasViewerAccess
 }
 
 function requireVisibleDiscipline(
@@ -139,7 +148,7 @@ function requireVisibleDiscipline(
 ): Discipline {
   const discipline = findDiscipline(db, disciplineId)
   if (!discipline) throw new Error('Дисциплина не найдена')
-  if (!canOpenDiscipline(profile, discipline)) throw new Error('Нет доступа к этой дисциплине')
+  if (!canOpenDiscipline(db, profile, discipline)) throw new Error('Нет доступа к этой дисциплине')
   return discipline
 }
 
@@ -522,13 +531,37 @@ export const demoBackend: Backend = {
       saveDb()
       return { profile: { ...coerceProfile(profile), login }, login }
     },
+    async resetStudentPassword(student, newPassword): Promise<PasswordResetResult> {
+      requireAdmin()
+      const identifier = student.trim()
+      if (!identifier) throw new Error('Введите логин студента')
+      const normalized = identifier.toLowerCase()
+      const db = loadDb()
+      const user = db.users.find(
+        (item) =>
+          item.profile.id === identifier || item.login.toLowerCase() === normalized,
+      )
+      if (!user || user.profile.role !== 'student') {
+        throw new Error('Студент с таким логином не найден')
+      }
+      if (newPassword) {
+        const passwordError = validatePassword(newPassword)
+        if (passwordError) throw new Error(passwordError)
+      }
+      const password = newPassword || randomPassword()
+      user.password = password
+      saveDb()
+      return { login: user.login, password, fullName: user.profile.full_name }
+    },
   },
 
   disciplines: {
     async list() {
       const profile = requireSession()
       const db = loadDb()
-      const visible = db.disciplines.filter((discipline) => canOpenDiscipline(profile, discipline))
+      const visible = db.disciplines.filter((discipline) =>
+        canOpenDiscipline(db, profile, discipline),
+      )
       const stats = new Map<string, { graded: number; new: number }>()
       for (const discipline of visible) stats.set(discipline.id, { graded: 0, new: 0 })
 
@@ -1012,7 +1045,7 @@ export const demoBackend: Backend = {
       const discipline = assignment?.discipline_id
         ? findDiscipline(db, assignment.discipline_id)
         : null
-      if (!assignment || !discipline || !canOpenDiscipline(profile, discipline)) {
+      if (!assignment || !discipline || !canOpenDiscipline(db, profile, discipline)) {
         throw new Error('Нет доступа к файлу задания')
       }
       const blob = await getDemoFile(path)

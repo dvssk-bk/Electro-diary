@@ -531,6 +531,16 @@ svg {
   color: var(--navy-700);
 }
 
+.auth-forgot {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 10px auto 0;
+  font: inherit;
+  cursor: pointer;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;

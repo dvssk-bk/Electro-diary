@@ -12,6 +12,7 @@ import type {
   NewAssignment,
   NewDiscipline,
   NewExtraAssignment,
+  PasswordResetResult,
   Profile,
   ProfileInput,
   StudentCredentials,
@@ -48,6 +49,14 @@ export interface Backend {
     changePassword: (currentPassword: string, newPassword: string) => Promise<void>
     register: (fullName: string, groupName: string) => Promise<StudentCredentials>
     registerTeacher: (fullName: string, password: string) => Promise<TeacherRegistration>
+    /**
+     * Сброс пароля студента администратором. Если новый пароль не передан,
+     * генерируется временный. Возвращённый пароль показывается один раз.
+     */
+    resetStudentPassword: (
+      student: string,
+      newPassword?: string,
+    ) => Promise<PasswordResetResult>
   }
   disciplines: {
     list: () => Promise<Discipline[]>
