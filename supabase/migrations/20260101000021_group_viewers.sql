@@ -100,7 +100,7 @@ where (
   )
   or public.student_can_view_group(d.group_name);
 
-revoke all on view public.discipline_catalog from anon, authenticated;
+revoke all on public.discipline_catalog from anon, authenticated;
 grant select on public.discipline_catalog to authenticated;
 
 -- Журнал: кроме собственной группы у старосты может быть доступ к группам из group_viewers.
@@ -140,7 +140,7 @@ where s.student_id = auth.uid()
         )
    );
 
-revoke all on view public.journal_entries from anon, authenticated;
+revoke all on public.journal_entries from anon, authenticated;
 grant select on public.journal_entries to authenticated;
 
 notify pgrst, 'reload schema';
