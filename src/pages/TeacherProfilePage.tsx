@@ -21,7 +21,7 @@ import { useToast } from '../context/ToastContext'
 import { backend } from '../lib/api'
 import { prepareAvatar } from '../lib/avatar'
 import { formatBirthday } from '../lib/birthday'
-import { PASSWORD_LIMITS, PROFILE_LIMITS, validatePassword, validateProfile } from '../lib/profile'
+import { PASSWORD_LIMITS, PROFILE_LIMITS, accentStyle, validatePassword, validateProfile } from '../lib/profile'
 import type { Profile } from '../lib/types'
 
 export function TeacherProfilePage({ self = false }: { self?: boolean }) {
@@ -206,7 +206,7 @@ export function TeacherProfilePage({ self = false }: { self?: boolean }) {
       ) : error || !teacher ? (
         <ErrorBox>{error || 'Преподаватель не найден'}</ErrorBox>
       ) : (
-        <div className="profile-layout">
+        <div className="profile-layout" style={accentStyle(teacher.accent_color)}>
           <aside className="profile-card">
             <Avatar profile={teacher} size="xl" />
             <h2>{teacher.full_name}</h2>

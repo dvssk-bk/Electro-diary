@@ -5590,6 +5590,22 @@ svg {
   text-align: center;
 }
 
+/* Акцентная полоса задаётся инлайновой переменной --profile-accent
+   (см. src/lib/profile.ts, accentStyle). Без акцента полоса прозрачная. */
+.profile-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 5px;
+  background: var(--profile-accent, transparent);
+  pointer-events: none;
+}
+
+.profile-card {
+  position: relative;
+  overflow: hidden;
+}
+
 .profile-card h2 {
   margin: 4px 0 0;
   color: var(--navy-950);
@@ -7230,6 +7246,34 @@ body.has-season-garland .admin-login {
   flex-wrap: wrap;
   align-items: center;
   gap: 18px;
+}
+
+.accent-preview {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  min-height: 54px;
+  padding: 18px 16px 12px;
+  border: 1px solid #ddd5c5;
+  border-radius: 14px;
+  background: #fffdf8;
+}
+
+.accent-preview__bar {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 5px;
+  background: var(--profile-accent, transparent);
+}
+
+.accent-preview--none .accent-preview__bar {
+  background: repeating-linear-gradient(90deg, #e4ddcf 0 10px, transparent 10px 18px);
+}
+
+.accent-preview__label {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .frame-editor__preview {

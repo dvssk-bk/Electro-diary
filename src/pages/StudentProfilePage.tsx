@@ -21,7 +21,7 @@ import { useToast } from '../context/ToastContext'
 import { backend } from '../lib/api'
 import { formatBirthday } from '../lib/birthday'
 import { prepareAvatar } from '../lib/avatar'
-import { PASSWORD_LIMITS, PROFILE_LIMITS, validatePassword, validateProfile } from '../lib/profile'
+import { PASSWORD_LIMITS, PROFILE_LIMITS, accentStyle, validatePassword, validateProfile } from '../lib/profile'
 import { joinName, splitName, validateFullName } from '../lib/name'
 
 export function StudentProfilePage() {
@@ -187,7 +187,7 @@ export function StudentProfilePage() {
         </div>
       </div>
 
-      <div className="profile-layout">
+      <div className="profile-layout" style={accentStyle(profile.accent_color)}>
         <aside className="profile-card">
           <Avatar profile={profile} size="xl" />
           <h2>{profile.full_name}</h2>

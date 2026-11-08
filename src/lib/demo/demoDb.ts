@@ -90,6 +90,7 @@ export function loadDb(): DemoDb {
         for (const user of parsed.users) {
           user.profile.birthday_md ??= null
           user.profile.avatar_frame ??= null
+          user.profile.accent_color ??= null
         }
         cache = parsed
         saveDb()
@@ -155,6 +156,7 @@ export function coerceProfile(value: Profile): Profile {
     bio: value.bio ?? null,
     birthday_md: value.birthday_md ?? null,
     avatar_frame: value.avatar_frame ?? null,
+    accent_color: value.accent_color ?? null,
   }
 }
 

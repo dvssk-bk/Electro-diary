@@ -9,6 +9,7 @@ import { backend } from '../lib/api'
 import { formatBirthday } from '../lib/birthday'
 import { formatDate } from '../lib/format'
 import { splitName } from '../lib/name'
+import { accentStyle } from '../lib/profile'
 import type { Profile } from '../lib/types'
 
 export function StudentPublicProfilePage() {
@@ -80,7 +81,7 @@ export function StudentPublicProfilePage() {
       ) : error || !student ? (
         <ErrorBox>{error || 'Студент не найден'}</ErrorBox>
       ) : (
-        <div className="profile-layout">
+        <div className="profile-layout" style={accentStyle(student.accent_color)}>
           <aside className="profile-card">
             <Avatar profile={student} size="xl" />
             <h2>{student.full_name}</h2>

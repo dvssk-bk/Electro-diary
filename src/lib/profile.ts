@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import type { ProfileInput } from './types'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -6,6 +7,8 @@ const PHONE_RE = /^[0-9+()\-\s]{5,30}$/
 const BIRTHDAY_RE = /^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/
 /** `#RRGGBB` или `#RRGGBB,#RRGGBB` — градиент из двух цветов. */
 const FRAME_RE = /^#[0-9a-fA-F]{6}(,#[0-9a-fA-F]{6})?$/
+/** Один цвет `#RRGGBB` — акцент профиля. */
+const COLOR_RE = /^#[0-9a-fA-F]{6}$/
 
 export const PROFILE_LIMITS = {
   email: 150,
@@ -38,6 +41,34 @@ export function normalizeFrame(value: string | null | undefined): string | null 
   const [first, second] = trimmed.split(',')
   if (second) return `${first},${second}`
   return trimmed
+}
+
+/** Нормализует акцентный цвет: пустая строка → `null`, цвет — в нижний регистр. */
+export function normalizeAccent(value: string | null | undefined): string | null {
+  const trimmed = value?.trim().toLowerCase() ?? ''
+  return trimmed || null
+}
+
+/** CSS-цвет акцента; некорректное значение отбрасываем. */
+export function accentToCss(accent: string | null | undefined): string | null {
+  const value = normalizeAccent(accent)
+  return value && COLOR_RE.test(value) ? value : null
+}
+
+/**
+ * Инлайн-стиль с CSS-переменной `--profile-accent` для карточки профиля.
+ * Если акцент не задан, возвращаем `undefined` — остаётся оформление по умолчанию.
+ */
+export function accentStyle(accent: string | null | undefined): CSSProperties | undefined {
+  const value = accentToCss(accent)
+  return value ? ({ '--profile-accent': value } as CSSProperties) : undefined
+}
+
+export function validateAccent(accent: string | null | undefined): string | null {
+  const value = normalizeAccent(accent)
+  if (!value) return null
+  if (!COLOR_RE.test(value)) return 'Акцентный цвет задан некорректно'
+  return null
 }
 
 /** Нормализует день рождения `MM-DD`; пустое значение → `null`. */
@@ -86,6 +117,7 @@ export function normalizeProfile(input: ProfileInput): ProfileInput {
   if (input.bio !== undefined) value.bio = input.bio?.trim() || null
   if (input.birthday_md !== undefined) value.birthday_md = normalizeBirthday(input.birthday_md)
   if (input.avatar_frame !== undefined) value.avatar_frame = normalizeFrame(input.avatar_frame)
+  if (input.accent_color !== undefined) value.accent_color = normalizeAccent(input.accent_color)
   return value
 }
 
@@ -123,6 +155,11 @@ export function validateProfile(input: ProfileInput): string | null {
   if (value.avatar_frame !== undefined) {
     const frameError = validateFrame(value.avatar_frame)
     if (frameError) return frameError
+  }
+
+  if (value.accent_color !== undefined) {
+    const accentError = validateAccent(value.accent_color)
+    if (accentError) return accentError
   }
 
   return null

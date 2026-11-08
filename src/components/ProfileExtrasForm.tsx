@@ -6,7 +6,14 @@ import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { backend } from '../lib/api'
 import { MONTHS_NOM, daysInMonth, formatBirthday } from '../lib/birthday'
-import { normalizeFrame, validateBirthday, validateFrame } from '../lib/profile'
+import {
+  accentStyle,
+  normalizeAccent,
+  normalizeFrame,
+  validateAccent,
+  validateBirthday,
+  validateFrame,
+} from '../lib/profile'
 import type { Profile } from '../lib/types'
 
 /** Готовые цвета рамки: клик — и цвет выбран, как из палитры. */
@@ -19,6 +26,19 @@ const FRAME_PRESETS = [
   '#ffa94d',
   '#1f7fa8',
   '#243b55',
+]
+/** Спокойные акценты, которые хорошо смотрятся на светлой карточке профиля. */
+const ACCENT_PRESETS = [
+  { value: '#3b82f6', label: 'Синий' },
+  { value: '#0ea5e9', label: 'Небесный' },
+  { value: '#10b981', label: 'Изумрудный' },
+  { value: '#84cc16', label: 'Лаймовый' },
+  { value: '#f59e0b', label: 'Янтарный' },
+  { value: '#f97316', label: 'Оранжевый' },
+  { value: '#ef4444', label: 'Красный' },
+  { value: '#ec4899', label: 'Розовый' },
+  { value: '#8b5cf6', label: 'Фиолетовый' },
+  { value: '#64748b', label: 'Графитовый' },
 ]
 const FALLBACK_COLORS = { color1: '#58a6ff', color2: '#c77dff' }
 
@@ -46,7 +66,7 @@ function pad2(value: number): string {
 }
 
 /**
- * Формы «Рамка аватара» и «День рождения» для собственного профиля.
+ * Формы «Акцентный цвет», «Рамка аватара» и «День рождения» для собственного профиля.
  * Каждая форма отправляет только своё поле (updateMine — патч), поэтому
  * они не затирают контакты и описание.
  */
@@ -68,6 +88,10 @@ export function ProfileExtrasForm({
   const [frameSaving, setFrameSaving] = useState(false)
   const [frameError, setFrameError] = useState('')
 
+  const [accent, setAccent] = useState(normalizeAccent(profile.accent_color) ?? '')
+  const [accentSaving, setAccentSaving] = useState(false)
+  const [accentError, setAccentError] = useState('')
+
   const initialBirthday = /^(\d{2})-(\d{2})$/.exec(profile.birthday_md ?? '')
   const [month, setMonth] = useState(initialBirthday ? initialBirthday[1] : '')
   const [day, setDay] = useState(initialBirthday ? initialBirthday[2] : '')
@@ -75,6 +99,28 @@ export function ProfileExtrasForm({
   const [birthdayError, setBirthdayError] = useState('')
 
   const draftFrame = gradient ? `${color1},${color2}` : color1
+
+  const saveAccent = async (event: FormEvent) => {
+    event.preventDefault()
+    setAccentError('')
+    const value = accent || null
+    const message = validateAccent(value)
+    if (message) {
+      setAccentError(message)
+      return
+    }
+    setAccentSaving(true)
+    try {
+      const updated = await backend.profiles.updateMine({ accent_color: value })
+      await refreshProfile()
+      onSaved?.(updated)
+      toast.success(value ? 'Акцентный цвет сохранён' : 'Акцентный цвет убран')
+    } catch (err) {
+      setAccentError((err as Error).message)
+    } finally {
+      setAccentSaving(false)
+    }
+  }
 
   const saveFrame = async (event: FormEvent) => {
     event.preventDefault()
@@ -133,6 +179,61 @@ export function ProfileExtrasForm({
 
   return (
     <>
+      <form className="profile-form" onSubmit={saveAccent}>
+        <div>
+          <span className="eyebrow">Оформление</span>
+          <h2>Акцентный цвет</h2>
+          <p className="muted">
+            Цветная полоса в карточке профиля. Акцент виден вам, одногруппникам и всем, кто
+            открывает профиль. На журнал и оценки он не влияет.
+          </p>
+        </div>
+
+        <div
+          className={`accent-preview${accent ? '' : ' accent-preview--none'}`}
+          style={accentStyle(accent)}
+        >
+          <span className="accent-preview__bar" />
+          <span className="accent-preview__label">
+            {accent ? 'Так выглядит верх карточки' : 'Акцент не выбран — оформление по умолчанию'}
+          </span>
+        </div>
+
+        <div className="frame-swatches" role="group" aria-label="Акцентные цвета">
+          {ACCENT_PRESETS.map((preset) => (
+            <button
+              key={preset.value}
+              type="button"
+              className="frame-swatch"
+              style={{ background: preset.value }}
+              aria-label={preset.label}
+              title={preset.label}
+              aria-pressed={accent.toLowerCase() === preset.value}
+              onClick={() => setAccent(preset.value)}
+            />
+          ))}
+          <button
+            type="button"
+            className="frame-swatch frame-swatch--none"
+            aria-label="Без акцента"
+            title="Без акцента"
+            aria-pressed={!accent}
+            onClick={() => setAccent('')}
+          >
+            ✕
+          </button>
+        </div>
+
+        {accentError ? <ErrorBox>{accentError}</ErrorBox> : null}
+
+        <div className="profile-form__actions">
+          <button type="submit" className="btn btn--primary" disabled={accentSaving}>
+            {accentSaving ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
+            Сохранить акцент
+          </button>
+        </div>
+      </form>
+
       <form className="profile-form" onSubmit={saveFrame}>
         <div>
           <span className="eyebrow">Оформление</span>

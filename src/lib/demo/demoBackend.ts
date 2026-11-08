@@ -713,6 +713,7 @@ export const demoBackend: Backend = {
       if (value.bio !== undefined) user.profile.bio = value.bio
       if (value.birthday_md !== undefined) user.profile.birthday_md = value.birthday_md
       if (value.avatar_frame !== undefined) user.profile.avatar_frame = value.avatar_frame
+      if (value.accent_color !== undefined) user.profile.accent_color = value.accent_color
       saveDb()
       emit()
       return { ...coerceProfile(user.profile), login: user.login }

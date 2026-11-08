@@ -17,6 +17,8 @@ export interface Profile {
   birthday_md?: string | null
   /** Рамка аватара: `#RRGGBB` или `#RRGGBB,#RRGGBB` (градиент). */
   avatar_frame?: string | null
+  /** Акцентный цвет профиля: `#RRGGBB`. */
+  accent_color?: string | null
 }
 
 /**
@@ -30,6 +32,7 @@ export interface ProfileInput {
   bio?: string | null
   birthday_md?: string | null
   avatar_frame?: string | null
+  accent_color?: string | null
 }
 
 export interface TestDataResult {

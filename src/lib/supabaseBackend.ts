@@ -55,6 +55,7 @@ interface ProfileRow {
   bio: string | null
   birthday_md: string | null
   avatar_frame: string | null
+  accent_color: string | null
 }
 
 function avatarPublicUrl(path: string | null | undefined): string | null {
@@ -76,11 +77,12 @@ function mapProfile(row: ProfileRow): Profile {
     bio: row.bio,
     birthday_md: row.birthday_md,
     avatar_frame: row.avatar_frame,
+    accent_color: row.accent_color,
   }
 }
 
 const PROFILE_SELECT =
-  'id, role, full_name, group_name, created_at, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame'
+  'id, role, full_name, group_name, created_at, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame, accent_color'
 
 async function fetchProfile(id: string): Promise<Profile | null> {
   const { data, error } = await client()
@@ -752,7 +754,7 @@ export const supabaseBackend: Backend = {
       const { data, error } = await client()
         .from('teacher_profiles')
         .select(
-          'id, full_name, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame, created_at',
+          'id, full_name, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame, accent_color, created_at',
         )
         .eq('id', id)
         .maybeSingle()
@@ -771,6 +773,7 @@ export const supabaseBackend: Backend = {
         bio: row.bio,
         birthday_md: row.birthday_md,
         avatar_frame: row.avatar_frame,
+        accent_color: row.accent_color,
       }
     },
     async getStudent(id: string): Promise<Profile | null> {
