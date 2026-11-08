@@ -5608,9 +5608,10 @@ svg {
   text-align: center;
 }
 
-/* Акцентная полоса задаётся инлайновой переменной --profile-accent
-   (см. src/lib/profile.ts, accentStyle). Без акцента полоса прозрачная. */
-.profile-card::before {
+/* Акцентная полоса и узор задаются инлайновыми CSS-переменными
+   (см. src/lib/profile.ts, profileCardStyle). Без акцента полоса прозрачная. */
+.profile-card::before,
+.profile-panel::before {
   content: '';
   position: absolute;
   inset: 0 0 auto;
@@ -5619,7 +5620,8 @@ svg {
   pointer-events: none;
 }
 
-.profile-card {
+.profile-card,
+.profile-panel {
   position: relative;
   overflow: hidden;
   background-image: var(--profile-pattern, none);
