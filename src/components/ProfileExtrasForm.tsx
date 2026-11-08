@@ -106,16 +106,21 @@ function pad2(value: number): string {
 }
 
 /**
- * Формы «Акцентный цвет», «Рамка аватара» и «День рождения» для собственного профиля.
- * Каждая форма отправляет только своё поле (updateMine — патч), поэтому
- * они не затирают контакты и описание.
+ * Формы «Акцентный цвет», «Фон карточки», «Эмодзи-аватар», «Рамка аватара»
+ * и «День рождения». Каждая форма отправляет только своё поле
+ * (updateMine — патч), поэтому они не затирают контакты и описание.
+ *
+ * `visibleSection` позволяет держать все формы смонтированными, но показывать
+ * только выбранную вкладку: так не теряются несохранённые значения.
  */
 export function ProfileExtrasForm({
   profile,
   onSaved,
+  visibleSection,
 }: {
   profile: Profile
   onSaved?: (value: Profile) => void
+  visibleSection?: 'main' | 'appearance' | 'none'
 }) {
   const toast = useToast()
   const { refreshProfile } = useAuth()
@@ -152,6 +157,8 @@ export function ProfileExtrasForm({
 
   const draftFrame = gradient ? `${color1},${color2}` : color1
   const draftAccent = accentGradient ? `${accentColor1},${accentColor2}` : accentColor1
+  const showMain = visibleSection === undefined || visibleSection === 'main'
+  const showAppearance = visibleSection === undefined || visibleSection === 'appearance'
 
   const saveAccent = async (event: FormEvent) => {
     event.preventDefault()
@@ -276,7 +283,7 @@ export function ProfileExtrasForm({
 
   return (
     <>
-      <form className="profile-form" onSubmit={saveAccent}>
+      <form className="profile-form" onSubmit={saveAccent} hidden={!showAppearance}>
         <div>
           <span className="eyebrow">Оформление</span>
           <h2>Акцентный цвет</h2>
@@ -373,7 +380,7 @@ export function ProfileExtrasForm({
         </div>
       </form>
 
-      <form className="profile-form" onSubmit={savePattern}>
+      <form className="profile-form" onSubmit={savePattern} hidden={!showAppearance}>
         <div>
           <span className="eyebrow">Оформление</span>
           <h2>Фон карточки</h2>
@@ -409,7 +416,7 @@ export function ProfileExtrasForm({
         </div>
       </form>
 
-      <form className="profile-form" onSubmit={saveEmoji}>
+      <form className="profile-form" onSubmit={saveEmoji} hidden={!showAppearance}>
         <div>
           <span className="eyebrow">Оформление</span>
           <h2>Эмодзи-аватар</h2>
@@ -469,7 +476,7 @@ export function ProfileExtrasForm({
         </div>
       </form>
 
-      <form className="profile-form" onSubmit={saveFrame}>
+      <form className="profile-form" onSubmit={saveFrame} hidden={!showAppearance}>
         <div>
           <span className="eyebrow">Оформление</span>
           <h2>Рамка аватара</h2>
@@ -563,7 +570,7 @@ export function ProfileExtrasForm({
         </div>
       </form>
 
-      <form className="profile-form" onSubmit={saveBirthday}>
+      <form className="profile-form" onSubmit={saveBirthday} hidden={!showMain}>
         <div>
           <span className="eyebrow">О вас</span>
           <h2>День рождения</h2>

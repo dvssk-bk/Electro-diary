@@ -5705,6 +5705,69 @@ svg {
   padding: 26px;
 }
 
+/* Вкладки настроек собственного профиля: «Основная информация»,
+   «Оформление» и «Прочее». Формы скрытой вкладки остаются в DOM,
+   чтобы несохранённые значения не терялись при переключении. */
+.profile-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px;
+  margin-bottom: 20px;
+  border-radius: 12px;
+  background: #f4efe5;
+}
+
+.profile-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.profile-tab:hover {
+  color: var(--navy-950);
+}
+
+.profile-tab[aria-selected='true'] {
+  background: #fffdf8;
+  color: var(--navy-950);
+  box-shadow: 0 2px 6px rgba(30, 45, 64, 0.1);
+}
+
+.profile-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.profile-section[hidden],
+.profile-form[hidden] {
+  display: none;
+}
+
+.profile-panel > .profile-form + .profile-form,
+.profile-panel > .profile-section + .profile-form,
+.profile-panel > .profile-form + .profile-section,
+.profile-panel > .profile-section + .profile-section {
+  margin-top: 26px;
+}
+
+.profile-section .profile-form--password {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
 .profile-form {
   display: flex;
   flex-direction: column;

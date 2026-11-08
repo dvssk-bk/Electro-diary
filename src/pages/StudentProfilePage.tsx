@@ -16,6 +16,7 @@ import { AppShell } from '../components/AppShell'
 import { Avatar } from '../components/Avatar'
 import { ErrorBox } from '../components/Feedback'
 import { ProfileExtrasForm } from '../components/ProfileExtrasForm'
+import { ProfileSectionTabs, type ProfileSection } from '../components/ProfileSectionTabs'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { backend } from '../lib/api'
@@ -43,6 +44,7 @@ export function StudentProfilePage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [passwordSaving, setPasswordSaving] = useState(false)
   const [passwordError, setPasswordError] = useState('')
+  const [activeSection, setActiveSection] = useState<ProfileSection>('main')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   if (!profile) {
@@ -274,7 +276,10 @@ export function StudentProfilePage() {
         </aside>
 
         <section className="profile-panel">
-          <form className="profile-form" onSubmit={saveFullName}>
+          <ProfileSectionTabs value={activeSection} onChange={setActiveSection} />
+
+          <div className="profile-section" hidden={activeSection !== 'main'}>
+            <form className="profile-form" onSubmit={saveFullName}>
             <div>
               <span className="eyebrow">Личные данные</span>
               <h2>ФИО</h2>
@@ -383,10 +388,21 @@ export function StudentProfilePage() {
               </button>
             </div>
           </form>
+          </div>
 
-          <ProfileExtrasForm profile={profile} />
+          <ProfileExtrasForm
+            profile={profile}
+            visibleSection={
+              activeSection === 'appearance'
+                ? 'appearance'
+                : activeSection === 'main'
+                  ? 'main'
+                  : 'none'
+            }
+          />
 
-          <form className="profile-form profile-form--password" onSubmit={changePassword}>
+          <div className="profile-section" hidden={activeSection !== 'other'}>
+            <form className="profile-form profile-form--password" onSubmit={changePassword}>
             <div>
               <span className="eyebrow">Безопасность</span>
               <h2>Смена пароля</h2>
@@ -447,6 +463,7 @@ export function StudentProfilePage() {
               </button>
             </div>
           </form>
+          </div>
         </section>
       </div>
     </AppShell>

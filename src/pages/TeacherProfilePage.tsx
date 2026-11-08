@@ -16,6 +16,7 @@ import { AppShell } from '../components/AppShell'
 import { Avatar } from '../components/Avatar'
 import { ErrorBox, Spinner } from '../components/Feedback'
 import { ProfileExtrasForm } from '../components/ProfileExtrasForm'
+import { ProfileSectionTabs, type ProfileSection } from '../components/ProfileSectionTabs'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { backend } from '../lib/api'
@@ -45,6 +46,7 @@ export function TeacherProfilePage({ self = false }: { self?: boolean }) {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [passwordSaving, setPasswordSaving] = useState(false)
   const [passwordError, setPasswordError] = useState('')
+  const [activeSection, setActiveSection] = useState<ProfileSection>('main')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -296,6 +298,9 @@ export function TeacherProfilePage({ self = false }: { self?: boolean }) {
           <section className="profile-panel">
             {isSelf ? (
               <>
+                <ProfileSectionTabs value={activeSection} onChange={setActiveSection} />
+
+                <div className="profile-section" hidden={activeSection !== 'main'}>
                 <form className="profile-form" onSubmit={save}>
                   <div>
                     <span className="eyebrow">Как вас видят студенты</span>
@@ -352,9 +357,21 @@ export function TeacherProfilePage({ self = false }: { self?: boolean }) {
                     </button>
                   </div>
                 </form>
+                </div>
 
-                <ProfileExtrasForm profile={teacher} onSaved={setTeacher} />
+                <ProfileExtrasForm
+                  profile={teacher}
+                  onSaved={setTeacher}
+                  visibleSection={
+                    activeSection === 'appearance'
+                      ? 'appearance'
+                      : activeSection === 'main'
+                        ? 'main'
+                        : 'none'
+                  }
+                />
 
+                <div className="profile-section" hidden={activeSection !== 'other'}>
                 <form className="profile-form profile-form--password" onSubmit={changePassword}>
                   <div>
                     <span className="eyebrow">Безопасность</span>
@@ -417,6 +434,7 @@ export function TeacherProfilePage({ self = false }: { self?: boolean }) {
                     </button>
                   </div>
                 </form>
+                </div>
               </>
             ) : (
               <div className="profile-readonly">
