@@ -91,6 +91,8 @@ export function loadDb(): DemoDb {
           user.profile.birthday_md ??= null
           user.profile.avatar_frame ??= null
           user.profile.accent_color ??= null
+          user.profile.avatar_emoji ??= null
+          user.profile.card_pattern ??= null
         }
         cache = parsed
         saveDb()
@@ -157,6 +159,8 @@ export function coerceProfile(value: Profile): Profile {
     birthday_md: value.birthday_md ?? null,
     avatar_frame: value.avatar_frame ?? null,
     accent_color: value.accent_color ?? null,
+    avatar_emoji: value.avatar_emoji ?? null,
+    card_pattern: value.card_pattern ?? null,
   }
 }
 

@@ -56,6 +56,8 @@ interface ProfileRow {
   birthday_md: string | null
   avatar_frame: string | null
   accent_color: string | null
+  avatar_emoji: string | null
+  card_pattern: string | null
 }
 
 function avatarPublicUrl(path: string | null | undefined): string | null {
@@ -78,11 +80,13 @@ function mapProfile(row: ProfileRow): Profile {
     birthday_md: row.birthday_md,
     avatar_frame: row.avatar_frame,
     accent_color: row.accent_color,
+    avatar_emoji: row.avatar_emoji,
+    card_pattern: row.card_pattern,
   }
 }
 
 const PROFILE_SELECT =
-  'id, role, full_name, group_name, created_at, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame, accent_color'
+  'id, role, full_name, group_name, created_at, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame, accent_color, avatar_emoji, card_pattern'
 
 async function fetchProfile(id: string): Promise<Profile | null> {
   const { data, error } = await client()
@@ -754,7 +758,7 @@ export const supabaseBackend: Backend = {
       const { data, error } = await client()
         .from('teacher_profiles')
         .select(
-          'id, full_name, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame, accent_color, created_at',
+          'id, full_name, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame, accent_color, avatar_emoji, card_pattern, created_at',
         )
         .eq('id', id)
         .maybeSingle()
@@ -774,6 +778,8 @@ export const supabaseBackend: Backend = {
         birthday_md: row.birthday_md,
         avatar_frame: row.avatar_frame,
         accent_color: row.accent_color,
+        avatar_emoji: row.avatar_emoji,
+        card_pattern: row.card_pattern,
       }
     },
     async getStudent(id: string): Promise<Profile | null> {
@@ -921,7 +927,7 @@ export const supabaseBackend: Backend = {
     const { data, error } = await client()
       .from('profiles')
       .select(
-        'id, role, full_name, group_name, created_at, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame',
+        'id, role, full_name, group_name, created_at, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame, avatar_emoji',
       )
       .eq('group_name', groupName)
       .eq('role', 'student')
@@ -930,7 +936,7 @@ export const supabaseBackend: Backend = {
     return ((data ?? []) as Array<
       Pick<
         ProfileRow,
-        'id' | 'role' | 'full_name' | 'group_name' | 'created_at' | 'avatar_path' | 'contact_email' | 'phone' | 'bio' | 'birthday_md' | 'avatar_frame'
+        'id' | 'role' | 'full_name' | 'group_name' | 'created_at' | 'avatar_path' | 'contact_email' | 'phone' | 'bio' | 'birthday_md' | 'avatar_frame' | 'avatar_emoji'
       >
     >).map((row) => ({
       id: row.id,
@@ -944,6 +950,7 @@ export const supabaseBackend: Backend = {
       bio: row.bio,
       birthday_md: row.birthday_md,
       avatar_frame: row.avatar_frame,
+      avatar_emoji: row.avatar_emoji,
     }))
   },
 
@@ -1226,7 +1233,7 @@ export const supabaseBackend: Backend = {
       db
         .from('profiles')
         .select(
-          'id, role, full_name, group_name, created_at, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame',
+          'id, role, full_name, group_name, created_at, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame, avatar_emoji',
         )
         .eq('group_name', group)
         .eq('role', 'student')
@@ -1328,6 +1335,7 @@ export const supabaseBackend: Backend = {
           | 'bio'
           | 'birthday_md'
           | 'avatar_frame'
+          | 'avatar_emoji'
         >
       >).map((row) => ({
         id: row.id,
@@ -1341,6 +1349,7 @@ export const supabaseBackend: Backend = {
         bio: row.bio,
         birthday_md: row.birthday_md,
         avatar_frame: row.avatar_frame,
+        avatar_emoji: row.avatar_emoji,
       })),
       entries,
     }
@@ -1366,7 +1375,7 @@ export const supabaseBackend: Backend = {
         db
           .from('profiles')
           .select(
-            'id, full_name, group_name, role, avatar_path, avatar_frame, birthday_md',
+            'id, full_name, group_name, role, avatar_path, avatar_frame, avatar_emoji, birthday_md',
           )
           .eq('group_name', discipline.group_name)
           .eq('role', 'student'),
@@ -1383,6 +1392,7 @@ export const supabaseBackend: Backend = {
         group_name: string | null
         avatar_path: string | null
         avatar_frame: string | null
+        avatar_emoji: string | null
         birthday_md: string | null
       }>)) {
         studentById.set(row.id, {
@@ -1391,6 +1401,7 @@ export const supabaseBackend: Backend = {
           group_name: row.group_name,
           avatar_url: avatarPublicUrl(row.avatar_path),
           avatar_frame: row.avatar_frame,
+          avatar_emoji: row.avatar_emoji,
           birthday_md: row.birthday_md,
         })
       }
@@ -1419,6 +1430,7 @@ export const supabaseBackend: Backend = {
             group_name: student.group_name,
             avatar_url: student.avatar_url,
             avatar_frame: student.avatar_frame,
+            avatar_emoji: student.avatar_emoji,
             birthday_md: student.birthday_md,
           },
         }
@@ -1786,7 +1798,7 @@ export const supabaseBackend: Backend = {
         db
           .from('profiles')
           .select(
-            'id, full_name, group_name, role, avatar_path, avatar_frame, birthday_md',
+            'id, full_name, group_name, role, avatar_path, avatar_frame, avatar_emoji, birthday_md',
           )
           .in('id', studentIds)
           .eq('role', 'student'),
@@ -1803,6 +1815,7 @@ export const supabaseBackend: Backend = {
         group_name: string | null
         avatar_path: string | null
         avatar_frame: string | null
+        avatar_emoji: string | null
         birthday_md: string | null
       }>)) {
         studentById.set(row.id, {
@@ -1811,6 +1824,7 @@ export const supabaseBackend: Backend = {
           group_name: row.group_name,
           avatar_url: avatarPublicUrl(row.avatar_path),
           avatar_frame: row.avatar_frame,
+          avatar_emoji: row.avatar_emoji,
           birthday_md: row.birthday_md,
         })
       }
@@ -1829,6 +1843,7 @@ export const supabaseBackend: Backend = {
               group_name: student.group_name,
               avatar_url: student.avatar_url,
               avatar_frame: student.avatar_frame,
+              avatar_emoji: student.avatar_emoji,
               birthday_md: student.birthday_md,
             },
           }
@@ -1989,7 +2004,7 @@ export const supabaseBackend: Backend = {
       const { data, error } = await client()
         .from('extra_leaderboard')
         .select(
-          'student_id, full_name, group_name, avatar_path, avatar_frame, total_points, graded_count',
+          'student_id, full_name, group_name, avatar_path, avatar_frame, avatar_emoji, total_points, graded_count',
         )
         .order('total_points', { ascending: false })
         .order('graded_count', { ascending: false })
@@ -1997,12 +2012,13 @@ export const supabaseBackend: Backend = {
         .limit(10)
       if (error) throw new Error(error.message)
       return (data ?? []).map((row) => {
-        const { avatar_path, avatar_frame, ...rest } = row as unknown as {
+        const { avatar_path, avatar_frame, avatar_emoji, ...rest } = row as unknown as {
           student_id: string
           full_name: string
           group_name: string | null
           avatar_path: string | null
           avatar_frame: string | null
+          avatar_emoji: string | null
           total_points: number
           graded_count: number
         }
@@ -2010,6 +2026,7 @@ export const supabaseBackend: Backend = {
           ...rest,
           avatar_url: avatarPublicUrl(avatar_path),
           avatar_frame,
+          avatar_emoji,
         }
       })
     },

@@ -5491,6 +5491,24 @@ svg {
   box-shadow: 0 8px 22px rgba(30, 45, 64, 0.14);
 }
 
+.avatar--emoji {
+  background: linear-gradient(135deg, #eef5ff, #f7f0ff);
+  font-size: 19px;
+  line-height: 1;
+}
+
+.avatar--sm.avatar--emoji {
+  font-size: 15px;
+}
+
+.avatar--lg.avatar--emoji {
+  font-size: 40px;
+}
+
+.avatar--xl.avatar--emoji {
+  font-size: 58px;
+}
+
 .user-chip--link {
   text-decoration: none;
   color: inherit;
@@ -5604,6 +5622,9 @@ svg {
 .profile-card {
   position: relative;
   overflow: hidden;
+  background-image: var(--profile-pattern, none);
+  background-size: var(--profile-pattern-size, auto);
+  background-repeat: repeat;
 }
 
 .profile-card h2 {
@@ -7274,6 +7295,81 @@ body.has-season-garland .admin-login {
 .accent-preview__label {
   color: var(--muted);
   font-size: 12px;
+}
+
+.pattern-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pattern-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 78px;
+  padding: 8px 6px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: #fffdf8;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.pattern-choice[aria-pressed='true'] {
+  border-color: var(--navy-600);
+  box-shadow: 0 0 0 1px var(--navy-600);
+  color: var(--navy-900);
+}
+
+.pattern-choice__preview {
+  width: 100%;
+  height: 34px;
+  border-radius: 7px;
+  background-color: #f7f2e8;
+  background-image: var(--profile-pattern, none);
+  background-size: var(--profile-pattern-size, auto);
+  background-repeat: repeat;
+}
+
+.emoji-editor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 18px;
+}
+
+.emoji-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.emoji-choice {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: #fffdf8;
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.emoji-choice[aria-pressed='true'] {
+  border-color: var(--navy-600);
+  box-shadow: 0 0 0 1px var(--navy-600);
+  background: #f2f7ff;
+}
+
+.emoji-choice--none {
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .frame-editor__preview {

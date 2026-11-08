@@ -9,10 +9,15 @@ import { MONTHS_NOM, daysInMonth, formatBirthday } from '../lib/birthday'
 import {
   accentStyle,
   normalizeAccent,
+  normalizeEmoji,
   normalizeFrame,
+  normalizePattern,
+  patternStyle,
   validateAccent,
   validateBirthday,
+  validateEmoji,
   validateFrame,
+  validatePattern,
 } from '../lib/profile'
 import type { Profile } from '../lib/types'
 
@@ -41,6 +46,22 @@ const ACCENT_PRESETS = [
   { value: '#64748b', label: 'Графитовый' },
 ]
 const FALLBACK_COLORS = { color1: '#58a6ff', color2: '#c77dff' }
+const ACCENT_FALLBACK = { color1: '#3b82f6', color2: '#8b5cf6' }
+
+/** Узоры фона карточки: мини-превью рисуется теми же CSS-переменными, что и профиль. */
+const PATTERN_PRESETS = [
+  { value: '', label: 'Без узора' },
+  { value: 'dots', label: 'Точки' },
+  { value: 'grid', label: 'Клетка' },
+  { value: 'diagonal', label: 'Диагональ' },
+  { value: 'paper', label: 'Линейка' },
+]
+
+/** Эмодзи для аватара, когда фото не загружено. */
+const EMOJI_PRESETS = [
+  '🦊', '🐼', '🐸', '🐱', '🐶', '🦉', '🐨', '🦁',
+  '🐧', '🐢', '🌸', '⭐', '🚀', '🎓', '🎧', '⚽',
+]
 
 function splitFrame(value: string | null | undefined): {
   color1: string
@@ -56,6 +77,25 @@ function splitFrame(value: string | null | undefined): {
   return {
     color1,
     color2: color2 ?? FALLBACK_COLORS.color2,
+    gradient: Boolean(color2),
+    enabled: true,
+  }
+}
+
+function splitAccent(value: string | null | undefined): {
+  color1: string
+  color2: string
+  gradient: boolean
+  enabled: boolean
+} {
+  const accent = normalizeAccent(value)
+  if (!accent) {
+    return { ...ACCENT_FALLBACK, gradient: false, enabled: false }
+  }
+  const [color1, color2] = accent.split(',')
+  return {
+    color1,
+    color2: color2 ?? ACCENT_FALLBACK.color2,
     gradient: Boolean(color2),
     enabled: true,
   }
@@ -88,9 +128,21 @@ export function ProfileExtrasForm({
   const [frameSaving, setFrameSaving] = useState(false)
   const [frameError, setFrameError] = useState('')
 
-  const [accent, setAccent] = useState(normalizeAccent(profile.accent_color) ?? '')
+  const initialAccent = splitAccent(profile.accent_color)
+  const [accentColor1, setAccentColor1] = useState(initialAccent.color1)
+  const [accentColor2, setAccentColor2] = useState(initialAccent.color2)
+  const [accentGradient, setAccentGradient] = useState(initialAccent.gradient)
+  const [accentEnabled, setAccentEnabled] = useState(initialAccent.enabled)
   const [accentSaving, setAccentSaving] = useState(false)
   const [accentError, setAccentError] = useState('')
+
+  const [pattern, setPattern] = useState(normalizePattern(profile.card_pattern) ?? '')
+  const [patternSaving, setPatternSaving] = useState(false)
+  const [patternError, setPatternError] = useState('')
+
+  const [avatarEmoji, setAvatarEmoji] = useState(normalizeEmoji(profile.avatar_emoji) ?? '')
+  const [emojiSaving, setEmojiSaving] = useState(false)
+  const [emojiError, setEmojiError] = useState('')
 
   const initialBirthday = /^(\d{2})-(\d{2})$/.exec(profile.birthday_md ?? '')
   const [month, setMonth] = useState(initialBirthday ? initialBirthday[1] : '')
@@ -99,11 +151,12 @@ export function ProfileExtrasForm({
   const [birthdayError, setBirthdayError] = useState('')
 
   const draftFrame = gradient ? `${color1},${color2}` : color1
+  const draftAccent = accentGradient ? `${accentColor1},${accentColor2}` : accentColor1
 
   const saveAccent = async (event: FormEvent) => {
     event.preventDefault()
     setAccentError('')
-    const value = accent || null
+    const value = accentEnabled ? draftAccent : null
     const message = validateAccent(value)
     if (message) {
       setAccentError(message)
@@ -119,6 +172,50 @@ export function ProfileExtrasForm({
       setAccentError((err as Error).message)
     } finally {
       setAccentSaving(false)
+    }
+  }
+
+  const savePattern = async (event: FormEvent) => {
+    event.preventDefault()
+    setPatternError('')
+    const value = pattern || null
+    const message = validatePattern(value)
+    if (message) {
+      setPatternError(message)
+      return
+    }
+    setPatternSaving(true)
+    try {
+      const updated = await backend.profiles.updateMine({ card_pattern: value })
+      await refreshProfile()
+      onSaved?.(updated)
+      toast.success(value ? 'Узор фона сохранён' : 'Узор фона убран')
+    } catch (err) {
+      setPatternError((err as Error).message)
+    } finally {
+      setPatternSaving(false)
+    }
+  }
+
+  const saveEmoji = async (event: FormEvent) => {
+    event.preventDefault()
+    setEmojiError('')
+    const value = avatarEmoji || null
+    const message = validateEmoji(value)
+    if (message) {
+      setEmojiError(message)
+      return
+    }
+    setEmojiSaving(true)
+    try {
+      const updated = await backend.profiles.updateMine({ avatar_emoji: value })
+      await refreshProfile()
+      onSaved?.(updated)
+      toast.success(value ? 'Эмодзи-аватар сохранён' : 'Эмодзи-аватар убран')
+    } catch (err) {
+      setEmojiError((err as Error).message)
+    } finally {
+      setEmojiSaving(false)
     }
   }
 
@@ -184,19 +281,58 @@ export function ProfileExtrasForm({
           <span className="eyebrow">Оформление</span>
           <h2>Акцентный цвет</h2>
           <p className="muted">
-            Цветная полоса в карточке профиля. Акцент виден вам, одногруппникам и всем, кто
-            открывает профиль. На журнал и оценки он не влияет.
+            Цветная полоса в карточке профиля: один цвет или градиент из двух. Акцент виден
+            вам, одногруппникам и всем, кто открывает профиль. На журнал и оценки он не влияет.
           </p>
         </div>
 
         <div
-          className={`accent-preview${accent ? '' : ' accent-preview--none'}`}
-          style={accentStyle(accent)}
+          className={`accent-preview${accentEnabled ? '' : ' accent-preview--none'}`}
+          style={accentStyle(accentEnabled ? draftAccent : null)}
         >
           <span className="accent-preview__bar" />
           <span className="accent-preview__label">
-            {accent ? 'Так выглядит верх карточки' : 'Акцент не выбран — оформление по умолчанию'}
+            {accentEnabled
+              ? 'Так выглядит верх карточки'
+              : 'Акцент не выбран — оформление по умолчанию'}
           </span>
+        </div>
+
+        <div className="frame-editor__colors">
+          <label className="color-well">
+            <input
+              type="color"
+              value={accentColor1}
+              onChange={(event) => {
+                setAccentColor1(event.target.value)
+                setAccentEnabled(true)
+              }}
+            />
+            <span>Цвет 1</span>
+          </label>
+          <label className="color-well">
+            <input
+              type="color"
+              value={accentColor2}
+              disabled={!accentGradient}
+              onChange={(event) => {
+                setAccentColor2(event.target.value)
+                setAccentEnabled(true)
+              }}
+            />
+            <span>Цвет 2</span>
+          </label>
+          <label className="frame-check">
+            <input
+              type="checkbox"
+              checked={accentGradient}
+              onChange={(event) => {
+                setAccentGradient(event.target.checked)
+                setAccentEnabled(true)
+              }}
+            />
+            Градиент
+          </label>
         </div>
 
         <div className="frame-swatches" role="group" aria-label="Акцентные цвета">
@@ -208,8 +344,11 @@ export function ProfileExtrasForm({
               style={{ background: preset.value }}
               aria-label={preset.label}
               title={preset.label}
-              aria-pressed={accent.toLowerCase() === preset.value}
-              onClick={() => setAccent(preset.value)}
+              aria-pressed={accentEnabled && accentColor1.toLowerCase() === preset.value}
+              onClick={() => {
+                setAccentColor1(preset.value)
+                setAccentEnabled(true)
+              }}
             />
           ))}
           <button
@@ -217,8 +356,8 @@ export function ProfileExtrasForm({
             className="frame-swatch frame-swatch--none"
             aria-label="Без акцента"
             title="Без акцента"
-            aria-pressed={!accent}
-            onClick={() => setAccent('')}
+            aria-pressed={!accentEnabled}
+            onClick={() => setAccentEnabled(false)}
           >
             ✕
           </button>
@@ -230,6 +369,102 @@ export function ProfileExtrasForm({
           <button type="submit" className="btn btn--primary" disabled={accentSaving}>
             {accentSaving ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
             Сохранить акцент
+          </button>
+        </div>
+      </form>
+
+      <form className="profile-form" onSubmit={savePattern}>
+        <div>
+          <span className="eyebrow">Оформление</span>
+          <h2>Фон карточки</h2>
+          <p className="muted">
+            Лёгкий узор поверх цвета карточки. Не мешает читать контакты и хорошо сочетается
+            с акцентом.
+          </p>
+        </div>
+
+        <div className="pattern-grid" role="group" aria-label="Узор фона карточки">
+          {PATTERN_PRESETS.map((preset) => (
+            <button
+              key={preset.value || 'none'}
+              type="button"
+              className="pattern-choice"
+              style={patternStyle(preset.value)}
+              aria-pressed={pattern === preset.value}
+              onClick={() => setPattern(preset.value)}
+            >
+              <span className="pattern-choice__preview" aria-hidden="true" />
+              <span>{preset.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {patternError ? <ErrorBox>{patternError}</ErrorBox> : null}
+
+        <div className="profile-form__actions">
+          <button type="submit" className="btn btn--primary" disabled={patternSaving}>
+            {patternSaving ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
+            Сохранить фон
+          </button>
+        </div>
+      </form>
+
+      <form className="profile-form" onSubmit={saveEmoji}>
+        <div>
+          <span className="eyebrow">Оформление</span>
+          <h2>Эмодзи-аватар</h2>
+          <p className="muted">
+            Показывает эмодзи вместо инициалов, если фотография не загружена. Если фото есть,
+            оно остаётся главным — эмодзи появится после его удаления.
+          </p>
+        </div>
+
+        <div className="emoji-editor">
+          <div className="frame-editor__preview">
+            <Avatar
+              profile={{
+                ...profile,
+                avatar_url: null,
+                avatar_emoji: avatarEmoji || null,
+              }}
+              size="lg"
+            />
+          </div>
+
+          <div className="frame-editor__controls">
+            <div className="emoji-grid" role="group" aria-label="Эмодзи для аватара">
+              {EMOJI_PRESETS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  className="emoji-choice"
+                  aria-label={`Эмодзи ${emoji}`}
+                  aria-pressed={avatarEmoji === emoji}
+                  onClick={() => setAvatarEmoji(emoji)}
+                >
+                  {emoji}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="emoji-choice emoji-choice--none"
+                aria-label="Без эмодзи"
+                title="Без эмодзи"
+                aria-pressed={!avatarEmoji}
+                onClick={() => setAvatarEmoji('')}
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {emojiError ? <ErrorBox>{emojiError}</ErrorBox> : null}
+
+        <div className="profile-form__actions">
+          <button type="submit" className="btn btn--primary" disabled={emojiSaving}>
+            {emojiSaving ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
+            Сохранить эмодзи
           </button>
         </div>
       </form>

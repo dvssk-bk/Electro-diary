@@ -395,6 +395,7 @@ function buildExtraLeaderboard(db: ReturnType<typeof loadDb>): ExtraLeaderboardE
       group_name: student.group_name,
       avatar_url: student.avatar_url ?? null,
       avatar_frame: student.avatar_frame ?? null,
+      avatar_emoji: student.avatar_emoji ?? null,
       total_points: 0,
       graded_count: 0,
     }
@@ -714,6 +715,8 @@ export const demoBackend: Backend = {
       if (value.birthday_md !== undefined) user.profile.birthday_md = value.birthday_md
       if (value.avatar_frame !== undefined) user.profile.avatar_frame = value.avatar_frame
       if (value.accent_color !== undefined) user.profile.accent_color = value.accent_color
+      if (value.avatar_emoji !== undefined) user.profile.avatar_emoji = value.avatar_emoji
+      if (value.card_pattern !== undefined) user.profile.card_pattern = value.card_pattern
       saveDb()
       emit()
       return { ...coerceProfile(user.profile), login: user.login }

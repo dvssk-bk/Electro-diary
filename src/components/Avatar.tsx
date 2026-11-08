@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { frameToCss } from '../lib/profile'
+import { frameToCss, normalizeEmoji } from '../lib/profile'
 import type { Profile } from '../lib/types'
 
 type AvatarSize = 'sm' | 'md' | 'lg' | 'xl'
@@ -19,7 +19,7 @@ export function Avatar({
   size = 'md',
   className = '',
 }: {
-  profile: Pick<Profile, 'full_name' | 'avatar_url' | 'avatar_frame'>
+  profile: Pick<Profile, 'full_name' | 'avatar_url' | 'avatar_frame' | 'avatar_emoji'>
   size?: AvatarSize
   className?: string
 }) {
@@ -30,6 +30,7 @@ export function Avatar({
   }, [profile.avatar_url])
 
   const classes = `avatar avatar--${size} ${className}`.trim()
+  const emoji = normalizeEmoji(profile.avatar_emoji)
 
   const content =
     profile.avatar_url && !failed ? (
@@ -39,6 +40,10 @@ export function Avatar({
         alt={`Аватар: ${profile.full_name}`}
         onError={() => setFailed(true)}
       />
+    ) : emoji ? (
+      <span className={`${classes} avatar--emoji`} aria-hidden="true">
+        {emoji}
+      </span>
     ) : (
       <span className={classes} aria-hidden="true">
         {initials(profile.full_name)}

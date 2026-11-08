@@ -17,8 +17,12 @@ export interface Profile {
   birthday_md?: string | null
   /** Рамка аватара: `#RRGGBB` или `#RRGGBB,#RRGGBB` (градиент). */
   avatar_frame?: string | null
-  /** Акцентный цвет профиля: `#RRGGBB`. */
+  /** Акцентный цвет профиля: `#RRGGBB` или `#RRGGBB,#RRGGBB` (градиент). */
   accent_color?: string | null
+  /** Эмодзи вместо аватара, если фото не загружено. */
+  avatar_emoji?: string | null
+  /** Узор фона карточки профиля: `dots`, `grid`, `diagonal`, `paper`. */
+  card_pattern?: string | null
 }
 
 /**
@@ -33,6 +37,8 @@ export interface ProfileInput {
   birthday_md?: string | null
   avatar_frame?: string | null
   accent_color?: string | null
+  avatar_emoji?: string | null
+  card_pattern?: string | null
 }
 
 export interface TestDataResult {
@@ -217,7 +223,13 @@ export interface WorkRow {
   assignment: Assignment
   student: Pick<
     Profile,
-    'id' | 'full_name' | 'group_name' | 'avatar_url' | 'avatar_frame' | 'birthday_md'
+    | 'id'
+    | 'full_name'
+    | 'group_name'
+    | 'avatar_url'
+    | 'avatar_frame'
+    | 'avatar_emoji'
+    | 'birthday_md'
   >
 }
 
@@ -261,7 +273,13 @@ export interface ExtraWorkRow {
   assignment: ExtraAssignment
   student: Pick<
     Profile,
-    'id' | 'full_name' | 'group_name' | 'avatar_url' | 'avatar_frame' | 'birthday_md'
+    | 'id'
+    | 'full_name'
+    | 'group_name'
+    | 'avatar_url'
+    | 'avatar_frame'
+    | 'avatar_emoji'
+    | 'birthday_md'
   >
 }
 
@@ -271,6 +289,7 @@ export interface ExtraLeaderboardEntry {
   group_name: string | null
   avatar_url?: string | null
   avatar_frame?: string | null
+  avatar_emoji?: string | null
   total_points: number
   graded_count: number
 }

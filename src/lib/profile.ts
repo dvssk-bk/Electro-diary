@@ -7,13 +7,16 @@ const PHONE_RE = /^[0-9+()\-\s]{5,30}$/
 const BIRTHDAY_RE = /^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/
 /** `#RRGGBB` или `#RRGGBB,#RRGGBB` — градиент из двух цветов. */
 const FRAME_RE = /^#[0-9a-fA-F]{6}(,#[0-9a-fA-F]{6})?$/
-/** Один цвет `#RRGGBB` — акцент профиля. */
-const COLOR_RE = /^#[0-9a-fA-F]{6}$/
+
+/** Разрешённые узоры фона карточки профиля. */
+export const CARD_PATTERNS = ['dots', 'grid', 'diagonal', 'paper'] as const
+export type CardPattern = (typeof CARD_PATTERNS)[number]
 
 export const PROFILE_LIMITS = {
   email: 150,
   phone: 30,
   bio: 1000,
+  emoji: 16,
 } as const
 
 export const PASSWORD_LIMITS = {
@@ -43,16 +46,21 @@ export function normalizeFrame(value: string | null | undefined): string | null 
   return trimmed
 }
 
-/** Нормализует акцентный цвет: пустая строка → `null`, цвет — в нижний регистр. */
+/** Нормализует акцентный цвет: пустая строка → `null`, одиночный цвет или градиент. */
 export function normalizeAccent(value: string | null | undefined): string | null {
   const trimmed = value?.trim().toLowerCase() ?? ''
-  return trimmed || null
+  if (!trimmed) return null
+  const [first, second] = trimmed.split(',')
+  if (second) return `${first},${second}`
+  return trimmed
 }
 
-/** CSS-цвет акцента; некорректное значение отбрасываем. */
+/** CSS-цвет или градиент акцента; некорректное значение отбрасываем. */
 export function accentToCss(accent: string | null | undefined): string | null {
   const value = normalizeAccent(accent)
-  return value && COLOR_RE.test(value) ? value : null
+  if (!value || !FRAME_RE.test(value)) return null
+  const [first, second] = value.split(',')
+  return second ? `linear-gradient(135deg, ${first}, ${second})` : first
 }
 
 /**
@@ -67,7 +75,75 @@ export function accentStyle(accent: string | null | undefined): CSSProperties | 
 export function validateAccent(accent: string | null | undefined): string | null {
   const value = normalizeAccent(accent)
   if (!value) return null
-  if (!COLOR_RE.test(value)) return 'Акцентный цвет задан некорректно'
+  if (!FRAME_RE.test(value)) return 'Акцентный цвет задан некорректно'
+  return null
+}
+
+/** Нормализует узор фона карточки; пустое значение → `null`. */
+export function normalizePattern(value: string | null | undefined): CardPattern | null {
+  const trimmed = value?.trim().toLowerCase() ?? ''
+  return (CARD_PATTERNS as readonly string[]).includes(trimmed)
+    ? (trimmed as CardPattern)
+    : null
+}
+
+export function validatePattern(value: string | null | undefined): string | null {
+  const trimmed = value?.trim() ?? ''
+  if (!trimmed) return null
+  if (!normalizePattern(trimmed)) return 'Узор фона задан некорректно'
+  return null
+}
+
+/** CSS-переменные узора фона карточки профиля. */
+export function patternStyle(pattern: string | null | undefined): CSSProperties | undefined {
+  const value = normalizePattern(pattern)
+  if (!value) return undefined
+
+  const styles: Record<CardPattern, CSSProperties> = {
+    dots: {
+      '--profile-pattern':
+        'radial-gradient(rgba(31, 45, 64, 0.14) 1px, transparent 1.5px)',
+      '--profile-pattern-size': '14px 14px',
+    } as CSSProperties,
+    grid: {
+      '--profile-pattern':
+        'linear-gradient(rgba(31, 45, 64, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(31, 45, 64, 0.08) 1px, transparent 1px)',
+      '--profile-pattern-size': '18px 18px',
+    } as CSSProperties,
+    diagonal: {
+      '--profile-pattern':
+        'repeating-linear-gradient(135deg, rgba(31, 45, 64, 0.07) 0 1px, transparent 1px 10px)',
+      '--profile-pattern-size': 'auto',
+    } as CSSProperties,
+    paper: {
+      '--profile-pattern':
+        'repeating-linear-gradient(0deg, rgba(31, 45, 64, 0.06) 0 1px, transparent 1px 22px)',
+      '--profile-pattern-size': 'auto',
+    } as CSSProperties,
+  }
+  return styles[value]
+}
+
+/** Общий стиль карточки: акцентная полоса и узор фона. */
+export function profileCardStyle(
+  accent: string | null | undefined,
+  pattern: string | null | undefined,
+): CSSProperties | undefined {
+  const style = { ...(accentStyle(accent) ?? {}), ...(patternStyle(pattern) ?? {}) }
+  return Object.keys(style).length ? style : undefined
+}
+
+/** Нормализует эмодзи-аватар; пустое значение → `null`. */
+export function normalizeEmoji(value: string | null | undefined): string | null {
+  const trimmed = value?.trim() ?? ''
+  return trimmed || null
+}
+
+export function validateEmoji(value: string | null | undefined): string | null {
+  const emoji = normalizeEmoji(value)
+  if (!emoji) return null
+  if (emoji.length > PROFILE_LIMITS.emoji) return 'Эмодзи слишком длинный'
+  if (/[\u0000-\u001f\u007f]/.test(emoji)) return 'Эмодзи задан некорректно'
   return null
 }
 
@@ -118,6 +194,8 @@ export function normalizeProfile(input: ProfileInput): ProfileInput {
   if (input.birthday_md !== undefined) value.birthday_md = normalizeBirthday(input.birthday_md)
   if (input.avatar_frame !== undefined) value.avatar_frame = normalizeFrame(input.avatar_frame)
   if (input.accent_color !== undefined) value.accent_color = normalizeAccent(input.accent_color)
+  if (input.avatar_emoji !== undefined) value.avatar_emoji = normalizeEmoji(input.avatar_emoji)
+  if (input.card_pattern !== undefined) value.card_pattern = normalizePattern(input.card_pattern)
   return value
 }
 
@@ -160,6 +238,16 @@ export function validateProfile(input: ProfileInput): string | null {
   if (value.accent_color !== undefined) {
     const accentError = validateAccent(value.accent_color)
     if (accentError) return accentError
+  }
+
+  if (value.avatar_emoji !== undefined) {
+    const emojiError = validateEmoji(value.avatar_emoji)
+    if (emojiError) return emojiError
+  }
+
+  if (value.card_pattern !== undefined) {
+    const patternError = validatePattern(value.card_pattern)
+    if (patternError) return patternError
   }
 
   return null
