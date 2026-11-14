@@ -21,7 +21,7 @@ export interface Profile {
   accent_color?: string | null
   /** Эмодзи вместо аватара, если фото не загружено. */
   avatar_emoji?: string | null
-  /** Узор фона карточки профиля: `dots`, `grid`, `diagonal`, `paper`. */
+  /** Градиентный фон профиля: `sunset`, `mint`, `lavender`, `sky`, `peach`. */
   card_pattern?: string | null
 }
 

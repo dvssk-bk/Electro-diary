@@ -5624,9 +5624,10 @@ svg {
 .profile-panel {
   position: relative;
   overflow: hidden;
-  background-image: var(--profile-pattern, none);
-  background-size: var(--profile-pattern-size, auto);
-  background-repeat: repeat;
+  background-color: #fffdf8;
+  background-image: var(--profile-bg, none);
+  background-repeat: no-repeat;
+  background-size: cover;
 }
 
 .profile-card h2 {
@@ -5660,7 +5661,7 @@ svg {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: var(--muted);
+  color: #5b6b7d;
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.06em;
@@ -5669,7 +5670,7 @@ svg {
 
 .profile-contacts dd {
   margin: 3px 0 0;
-  color: var(--ink-soft);
+  color: #34495e;
   font-size: 12.5px;
   line-height: 1.45;
   word-break: break-word;
@@ -5792,8 +5793,18 @@ svg {
 .profile-readonly > p {
   font-size: 12.5px;
   line-height: 1.55;
-  color: var(--ink-soft);
+  color: #4f6072;
   white-space: pre-wrap;
+}
+
+/* На градиентном фоне мелкий серый текст может «плыть» — делаем его темнее
+   только внутри профиля. */
+.profile-card .muted,
+.profile-panel .muted,
+.profile-panel .color-well span,
+.profile-panel .frame-check,
+.profile-panel .field__counter {
+  color: #4f6072;
 }
 
 .profile-form__actions {
@@ -5816,7 +5827,7 @@ svg {
   margin-top: 4px;
   padding-top: 14px;
   border-top: 1px solid #eee6d7;
-  color: var(--ink-soft);
+  color: #34495e;
   font-size: 12.5px;
 }
 
@@ -5956,7 +5967,7 @@ svg {
     padding: 0;
     border: 0;
     background: transparent;
-    border-radius: 12px;
+    border-radius: 50%;
     cursor: pointer;
     transition: transform 0.15s ease;
   }
@@ -5990,7 +6001,7 @@ svg {
     flex: none;
     width: 40px;
     height: 40px;
-    border-radius: 12px;
+    border-radius: 50%;
     background: linear-gradient(145deg, #244568, #315d89);
     color: #fff;
     font-size: 12px;
@@ -7390,13 +7401,19 @@ body.has-season-garland .admin-login {
 }
 
 .pattern-choice__preview {
+  display: grid;
+  place-items: center;
   width: 100%;
-  height: 34px;
+  height: 46px;
   border-radius: 7px;
   background-color: #f7f2e8;
-  background-image: var(--profile-pattern, none);
-  background-size: var(--profile-pattern-size, auto);
-  background-repeat: repeat;
+  background-image: var(--profile-bg, none);
+  background-repeat: no-repeat;
+  background-size: cover;
+  color: var(--navy-950);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
 }
 
 .emoji-editor {

@@ -61,7 +61,7 @@ export function ExtraLeaderboard({
                 <span className="extra-leaderboard__score">
                   <strong>{entry.total_points}</strong>
                   <small>
-                    {plural(entry.graded_count, ['работа', 'работы', 'работ'])}
+                    {plural(entry.total_points, ['балл', 'балла', 'баллов'])}
                   </small>
                 </span>
                 <ChevronRight size={15} className="extra-leaderboard__chevron" />

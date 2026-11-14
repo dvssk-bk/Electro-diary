@@ -8,8 +8,8 @@ const BIRTHDAY_RE = /^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/
 /** `#RRGGBB` или `#RRGGBB,#RRGGBB` — градиент из двух цветов. */
 const FRAME_RE = /^#[0-9a-fA-F]{6}(,#[0-9a-fA-F]{6})?$/
 
-/** Разрешённые узоры фона карточки профиля. */
-export const CARD_PATTERNS = ['dots', 'grid', 'diagonal', 'paper'] as const
+/** Разрешённые градиентные фоны карточки профиля. */
+export const CARD_PATTERNS = ['sunset', 'mint', 'lavender', 'sky', 'peach'] as const
 export type CardPattern = (typeof CARD_PATTERNS)[number]
 
 export const PROFILE_LIMITS = {
@@ -79,7 +79,7 @@ export function validateAccent(accent: string | null | undefined): string | null
   return null
 }
 
-/** Нормализует узор фона карточки; пустое значение → `null`. */
+/** Нормализует фон карточки; пустое или устаревшее значение → `null`. */
 export function normalizePattern(value: string | null | undefined): CardPattern | null {
   const trimmed = value?.trim().toLowerCase() ?? ''
   return (CARD_PATTERNS as readonly string[]).includes(trimmed)
@@ -90,41 +90,30 @@ export function normalizePattern(value: string | null | undefined): CardPattern 
 export function validatePattern(value: string | null | undefined): string | null {
   const trimmed = value?.trim() ?? ''
   if (!trimmed) return null
-  if (!normalizePattern(trimmed)) return 'Узор фона задан некорректно'
+  if (!normalizePattern(trimmed)) return 'Фон карточки задан некорректно'
   return null
 }
 
-/** CSS-переменные узора фона карточки профиля. */
+/**
+ * CSS-переменная `--profile-bg` с градиентом фона профиля.
+ * Все градиенты светлые: тёмный текст карточки и панели остаётся читаемым.
+ */
 export function patternStyle(pattern: string | null | undefined): CSSProperties | undefined {
   const value = normalizePattern(pattern)
   if (!value) return undefined
 
-  const styles: Record<CardPattern, CSSProperties> = {
-    dots: {
-      '--profile-pattern':
-        'radial-gradient(rgba(31, 45, 64, 0.14) 1px, transparent 1.5px)',
-      '--profile-pattern-size': '14px 14px',
-    } as CSSProperties,
-    grid: {
-      '--profile-pattern':
-        'linear-gradient(rgba(31, 45, 64, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(31, 45, 64, 0.08) 1px, transparent 1px)',
-      '--profile-pattern-size': '18px 18px',
-    } as CSSProperties,
-    diagonal: {
-      '--profile-pattern':
-        'repeating-linear-gradient(135deg, rgba(31, 45, 64, 0.07) 0 1px, transparent 1px 10px)',
-      '--profile-pattern-size': 'auto',
-    } as CSSProperties,
-    paper: {
-      '--profile-pattern':
-        'repeating-linear-gradient(0deg, rgba(31, 45, 64, 0.06) 0 1px, transparent 1px 22px)',
-      '--profile-pattern-size': 'auto',
-    } as CSSProperties,
+  const backgrounds: Record<CardPattern, string> = {
+    sunset: 'linear-gradient(135deg, #ffe7d6 0%, #ffdce8 52%, #ece0ff 100%)',
+    mint: 'linear-gradient(135deg, #d9f7e6 0%, #d0f2ef 55%, #ddf5ff 100%)',
+    lavender: 'linear-gradient(135deg, #e9e0ff 0%, #f5e1fc 55%, #ffe8f5 100%)',
+    sky: 'linear-gradient(135deg, #dceeff 0%, #e6f7ff 55%, #e2faf4 100%)',
+    peach: 'linear-gradient(135deg, #ffe8cf 0%, #fff3da 55%, #ffebe4 100%)',
   }
-  return styles[value]
+
+  return { '--profile-bg': backgrounds[value] } as CSSProperties
 }
 
-/** Общий стиль карточки: акцентная полоса и узор фона. */
+/** Общий стиль карточки: акцентная полоса и градиентный фон. */
 export function profileCardStyle(
   accent: string | null | undefined,
   pattern: string | null | undefined,

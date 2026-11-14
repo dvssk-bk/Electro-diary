@@ -48,13 +48,14 @@ const ACCENT_PRESETS = [
 const FALLBACK_COLORS = { color1: '#58a6ff', color2: '#c77dff' }
 const ACCENT_FALLBACK = { color1: '#3b82f6', color2: '#8b5cf6' }
 
-/** Узоры фона карточки: мини-превью рисуется теми же CSS-переменными, что и профиль. */
+/** Градиентные фоны карточки: превью рисуется той же CSS-переменной, что и профиль. */
 const PATTERN_PRESETS = [
-  { value: '', label: 'Без узора' },
-  { value: 'dots', label: 'Точки' },
-  { value: 'grid', label: 'Клетка' },
-  { value: 'diagonal', label: 'Диагональ' },
-  { value: 'paper', label: 'Линейка' },
+  { value: '', label: 'Без фона' },
+  { value: 'sunset', label: 'Закат' },
+  { value: 'mint', label: 'Мята' },
+  { value: 'lavender', label: 'Лаванда' },
+  { value: 'sky', label: 'Небо' },
+  { value: 'peach', label: 'Персик' },
 ]
 
 /** Эмодзи для аватара, когда фото не загружено. */
@@ -385,12 +386,12 @@ export function ProfileExtrasForm({
           <span className="eyebrow">Оформление</span>
           <h2>Фон карточки</h2>
           <p className="muted">
-            Лёгкий узор поверх цвета карточки. Не мешает читать контакты и хорошо сочетается
-            с акцентом.
+            Мягкий градиент для карточки и панели профиля. Цвета подобраны светлыми, поэтому
+            текст и контакты остаются читаемыми.
           </p>
         </div>
 
-        <div className="pattern-grid" role="group" aria-label="Узор фона карточки">
+        <div className="pattern-grid" role="group" aria-label="Градиентный фон карточки">
           {PATTERN_PRESETS.map((preset) => (
             <button
               key={preset.value || 'none'}
@@ -400,7 +401,13 @@ export function ProfileExtrasForm({
               aria-pressed={pattern === preset.value}
               onClick={() => setPattern(preset.value)}
             >
-              <span className="pattern-choice__preview" aria-hidden="true" />
+              <span
+                className="pattern-choice__preview"
+                aria-hidden="true"
+                style={preset.value ? undefined : { backgroundImage: 'none' }}
+              >
+                Aa
+              </span>
               <span>{preset.label}</span>
             </button>
           ))}
