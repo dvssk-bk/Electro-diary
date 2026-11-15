@@ -5630,6 +5630,31 @@ svg {
   background-size: cover;
 }
 
+/* Обложка: градиентная полоса сверху карточки. Аватар слегка заходит на неё,
+   поэтому контент поднимаем над фоном обложки. */
+.profile-cover {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 132px;
+  background-image: var(--profile-cover, none);
+  background-repeat: no-repeat;
+  background-size: cover;
+  pointer-events: none;
+}
+
+.profile-card--cover {
+  padding-top: 84px;
+}
+
+.profile-card--cover > *:not(.profile-cover) {
+  position: relative;
+  z-index: 1;
+}
+
+.profile-card--cover::before {
+  z-index: 2;
+}
+
 .profile-card h2 {
   margin: 4px 0 0;
   color: var(--navy-950);
@@ -5812,6 +5837,44 @@ svg {
   justify-content: flex-end;
   padding-top: 14px;
   border-top: 1px solid #eee6d7;
+}
+
+/* Автоконтраст: patternStyle() выставляет --profile-text и --profile-text-soft
+   в зависимости от яркости градиента. Правила ниже используют эти переменные,
+   поэтому на тёмном фоне текст становится светлым автоматически. */
+.profile-layout .profile-card h2,
+.profile-layout .profile-form h2,
+.profile-layout .profile-readonly h2 {
+  color: var(--profile-text, var(--navy-950));
+}
+
+.profile-layout .profile-form > div > p,
+.profile-layout .profile-readonly > p,
+.profile-layout .profile-card .muted,
+.profile-layout .profile-panel .muted,
+.profile-layout .profile-contacts dt,
+.profile-layout .profile-panel .field > span,
+.profile-layout .profile-panel .field__counter,
+.profile-layout .profile-panel .color-well span,
+.profile-layout .profile-panel .frame-check,
+.profile-layout .profile-readonly__contacts {
+  color: var(--profile-text-soft, #4f6072);
+}
+
+.profile-layout .profile-contacts dd {
+  color: var(--profile-text, #14253d);
+}
+
+.profile-layout .eyebrow,
+.profile-layout .profile-contacts a,
+.profile-layout .profile-readonly__contacts a {
+  color: var(--profile-link, var(--blue-700));
+}
+
+.profile-layout .profile-contacts,
+.profile-layout .profile-readonly__contacts,
+.profile-layout .profile-form__actions {
+  border-top-color: var(--profile-line, #eee6d7);
 }
 
 .profile-readonly {
@@ -7371,6 +7434,43 @@ body.has-season-garland .admin-login {
 .accent-preview__label {
   color: var(--muted);
   font-size: 12px;
+}
+
+.cover-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cover-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 118px;
+  padding: 8px 6px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: #fffdf8;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.cover-choice[aria-pressed='true'] {
+  border-color: var(--navy-600);
+  box-shadow: 0 0 0 1px var(--navy-600);
+  color: var(--navy-900);
+}
+
+.cover-choice__preview {
+  width: 100%;
+  height: 44px;
+  border-radius: 7px;
+  background-color: #f7f2e8;
+  background-image: var(--profile-cover, none);
+  background-repeat: no-repeat;
+  background-size: cover;
 }
 
 .pattern-grid {

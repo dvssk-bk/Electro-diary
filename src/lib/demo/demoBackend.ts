@@ -717,6 +717,7 @@ export const demoBackend: Backend = {
       if (value.accent_color !== undefined) user.profile.accent_color = value.accent_color
       if (value.avatar_emoji !== undefined) user.profile.avatar_emoji = value.avatar_emoji
       if (value.card_pattern !== undefined) user.profile.card_pattern = value.card_pattern
+      if (value.profile_cover !== undefined) user.profile.profile_cover = value.profile_cover
       saveDb()
       emit()
       return { ...coerceProfile(user.profile), login: user.login }

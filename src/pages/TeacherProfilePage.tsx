@@ -22,7 +22,7 @@ import { useToast } from '../context/ToastContext'
 import { backend } from '../lib/api'
 import { prepareAvatar } from '../lib/avatar'
 import { formatBirthday } from '../lib/birthday'
-import { PASSWORD_LIMITS, PROFILE_LIMITS, profileCardStyle, validatePassword, validateProfile } from '../lib/profile'
+import { PASSWORD_LIMITS, PROFILE_LIMITS, coverStyle, profileCardStyle, validatePassword, validateProfile } from '../lib/profile'
 import type { Profile } from '../lib/types'
 
 export function TeacherProfilePage({ self = false }: { self?: boolean }) {
@@ -181,6 +181,7 @@ export function TeacherProfilePage({ self = false }: { self?: boolean }) {
   }
 
   const backTo = profile?.role === 'admin' ? '/admin/journal' : '/journal'
+  const cover = coverStyle(teacher?.profile_cover)
 
   return (
     <AppShell role={profile?.role ?? 'student'}>
@@ -209,7 +210,8 @@ export function TeacherProfilePage({ self = false }: { self?: boolean }) {
         <ErrorBox>{error || 'Преподаватель не найден'}</ErrorBox>
       ) : (
         <div className="profile-layout" style={profileCardStyle(teacher.accent_color, teacher.card_pattern)}>
-          <aside className="profile-card">
+          <aside className={`profile-card${cover ? ' profile-card--cover' : ''}`}>
+            {cover ? <div className="profile-cover" style={cover} aria-hidden="true" /> : null}
             <Avatar profile={teacher} size="xl" />
             <h2>{teacher.full_name}</h2>
             <span className="badge badge--blue">

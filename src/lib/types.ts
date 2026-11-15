@@ -21,8 +21,10 @@ export interface Profile {
   accent_color?: string | null
   /** Эмодзи вместо аватара, если фото не загружено. */
   avatar_emoji?: string | null
-  /** Градиентный фон профиля: `sunset`, `mint`, `lavender`, `sky`, `peach`. */
+  /** Градиентный фон профиля: `sunset`, `mint`, `lavender`, `sky`, `peach` и др. */
   card_pattern?: string | null
+  /** Градиентная обложка над аватаром; значения из общего каталога градиентов. */
+  profile_cover?: string | null
 }
 
 /**
@@ -39,6 +41,7 @@ export interface ProfileInput {
   accent_color?: string | null
   avatar_emoji?: string | null
   card_pattern?: string | null
+  profile_cover?: string | null
 }
 
 export interface TestDataResult {

@@ -8,9 +8,76 @@ const BIRTHDAY_RE = /^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$/
 /** `#RRGGBB` или `#RRGGBB,#RRGGBB` — градиент из двух цветов. */
 const FRAME_RE = /^#[0-9a-fA-F]{6}(,#[0-9a-fA-F]{6})?$/
 
-/** Разрешённые градиентные фоны карточки профиля. */
-export const CARD_PATTERNS = ['sunset', 'mint', 'lavender', 'sky', 'peach'] as const
-export type CardPattern = (typeof CARD_PATTERNS)[number]
+/**
+ * Градиенты оформления профиля. Один каталог используется и для фона
+ * карточки, и для обложки: так проще добавлять новые варианты.
+ */
+export const PROFILE_GRADIENTS = [
+  {
+    value: 'sunset',
+    label: 'Закат',
+    css: 'linear-gradient(135deg, #ffe7d6 0%, #ffdce8 52%, #ece0ff 100%)',
+  },
+  {
+    value: 'mint',
+    label: 'Мята',
+    css: 'linear-gradient(135deg, #d9f7e6 0%, #d0f2ef 55%, #ddf5ff 100%)',
+  },
+  {
+    value: 'lavender',
+    label: 'Лаванда',
+    css: 'linear-gradient(135deg, #e9e0ff 0%, #f5e1fc 55%, #ffe8f5 100%)',
+  },
+  {
+    value: 'sky',
+    label: 'Небо',
+    css: 'linear-gradient(135deg, #dceeff 0%, #e6f7ff 55%, #e2faf4 100%)',
+  },
+  {
+    value: 'peach',
+    label: 'Персик',
+    css: 'linear-gradient(135deg, #ffe8cf 0%, #fff3da 55%, #ffebe4 100%)',
+  },
+  {
+    value: 'ocean',
+    label: 'Океан',
+    css: 'linear-gradient(135deg, #d6f2ff 0%, #c9f7ef 55%, #d7fbef 100%)',
+  },
+  {
+    value: 'forest',
+    label: 'Лес',
+    css: 'linear-gradient(135deg, #ddf4d9 0%, #d4f2e2 55%, #e7f8dc 100%)',
+  },
+  {
+    value: 'candy',
+    label: 'Карамель',
+    css: 'linear-gradient(135deg, #ffe0ee 0%, #ffe8f8 55%, #f3e5ff 100%)',
+  },
+  {
+    value: 'sand',
+    label: 'Песок',
+    css: 'linear-gradient(135deg, #f6ead3 0%, #fdf3df 55%, #f8e8da 100%)',
+  },
+  {
+    value: 'graphite',
+    label: 'Графит',
+    css: 'linear-gradient(135deg, #445466 0%, #2f3d4d 55%, #53667a 100%)',
+  },
+  {
+    value: 'night',
+    label: 'Ночь',
+    css: 'linear-gradient(135deg, #2b3a63 0%, #3d2f66 55%, #1f2c49 100%)',
+  },
+  {
+    value: 'berry',
+    label: 'Вишня',
+    css: 'linear-gradient(135deg, #5f2749 0%, #7d2f59 55%, #4d2140 100%)',
+  },
+] as const
+
+export type CardPattern = (typeof PROFILE_GRADIENTS)[number]['value']
+
+export const CARD_PATTERNS = PROFILE_GRADIENTS.map((item) => item.value)
 
 export const PROFILE_LIMITS = {
   email: 150,
@@ -79,12 +146,59 @@ export function validateAccent(accent: string | null | undefined): string | null
   return null
 }
 
+/** Ищет градиент по значению; неизвестное/устаревшее значение → `undefined`. */
+function findGradient(value: string | null | undefined) {
+  const trimmed = value?.trim().toLowerCase() ?? ''
+  if (!trimmed) return undefined
+  return PROFILE_GRADIENTS.find((item) => item.value === trimmed)
+}
+
+/**
+ * Средняя яркость градиента (0…1) по всем цветам, из которых он собран.
+ * Нужна, чтобы автоматически выбрать тёмный или светлый текст.
+ */
+function averageLuminance(css: string): number {
+  const hexes = css.match(/#[0-9a-fA-F]{6}/g) ?? []
+  if (!hexes.length) return 1
+
+  const channel = (value: number) => {
+    const normalized = value / 255
+    return normalized <= 0.03928
+      ? normalized / 12.92
+      : ((normalized + 0.055) / 1.055) ** 2.4
+  }
+
+  const total = hexes.reduce((sum, hex) => {
+    const red = parseInt(hex.slice(1, 3), 16)
+    const green = parseInt(hex.slice(3, 5), 16)
+    const blue = parseInt(hex.slice(5, 7), 16)
+    return sum + 0.2126 * channel(red) + 0.7152 * channel(green) + 0.0722 * channel(blue)
+  }, 0)
+
+  return total / hexes.length
+}
+
+/** CSS-переменные текста, подобранные под яркость градиента. */
+function gradientTextStyle(css: string): CSSProperties {
+  const darkBackground = averageLuminance(css) < 0.5
+  return darkBackground
+    ? ({
+        '--profile-text': '#ffffff',
+        '--profile-text-soft': '#dce7f2',
+        '--profile-link': '#b9ddff',
+        '--profile-line': 'rgba(255, 255, 255, 0.24)',
+      } as CSSProperties)
+    : ({
+        '--profile-text': '#14253d',
+        '--profile-text-soft': '#4f6072',
+        '--profile-link': '#1f5d8f',
+        '--profile-line': '#eee6d7',
+      } as CSSProperties)
+}
+
 /** Нормализует фон карточки; пустое или устаревшее значение → `null`. */
 export function normalizePattern(value: string | null | undefined): CardPattern | null {
-  const trimmed = value?.trim().toLowerCase() ?? ''
-  return (CARD_PATTERNS as readonly string[]).includes(trimmed)
-    ? (trimmed as CardPattern)
-    : null
+  return findGradient(value)?.value ?? null
 }
 
 export function validatePattern(value: string | null | undefined): string | null {
@@ -94,23 +208,35 @@ export function validatePattern(value: string | null | undefined): string | null
   return null
 }
 
+/** Нормализует обложку профиля; пустое значение → `null`. */
+export function normalizeCover(value: string | null | undefined): CardPattern | null {
+  return findGradient(value)?.value ?? null
+}
+
+export function validateCover(value: string | null | undefined): string | null {
+  const trimmed = value?.trim() ?? ''
+  if (!trimmed) return null
+  if (!normalizeCover(trimmed)) return 'Обложка задана некорректно'
+  return null
+}
+
 /**
- * CSS-переменная `--profile-bg` с градиентом фона профиля.
- * Все градиенты светлые: тёмный текст карточки и панели остаётся читаемым.
+ * CSS-переменные фона карточки и автоматического контраста текста.
+ * Светлые градиенты получают тёмный текст, насыщенные и тёмные — светлый.
  */
 export function patternStyle(pattern: string | null | undefined): CSSProperties | undefined {
-  const value = normalizePattern(pattern)
-  if (!value) return undefined
+  const gradient = findGradient(pattern)
+  if (!gradient) return undefined
+  return {
+    '--profile-bg': gradient.css,
+    ...gradientTextStyle(gradient.css),
+  } as CSSProperties
+}
 
-  const backgrounds: Record<CardPattern, string> = {
-    sunset: 'linear-gradient(135deg, #ffe7d6 0%, #ffdce8 52%, #ece0ff 100%)',
-    mint: 'linear-gradient(135deg, #d9f7e6 0%, #d0f2ef 55%, #ddf5ff 100%)',
-    lavender: 'linear-gradient(135deg, #e9e0ff 0%, #f5e1fc 55%, #ffe8f5 100%)',
-    sky: 'linear-gradient(135deg, #dceeff 0%, #e6f7ff 55%, #e2faf4 100%)',
-    peach: 'linear-gradient(135deg, #ffe8cf 0%, #fff3da 55%, #ffebe4 100%)',
-  }
-
-  return { '--profile-bg': backgrounds[value] } as CSSProperties
+/** CSS-переменная обложки профиля. */
+export function coverStyle(cover: string | null | undefined): CSSProperties | undefined {
+  const gradient = findGradient(cover)
+  return gradient ? ({ '--profile-cover': gradient.css } as CSSProperties) : undefined
 }
 
 /** Общий стиль карточки: акцентная полоса и градиентный фон. */
@@ -185,6 +311,7 @@ export function normalizeProfile(input: ProfileInput): ProfileInput {
   if (input.accent_color !== undefined) value.accent_color = normalizeAccent(input.accent_color)
   if (input.avatar_emoji !== undefined) value.avatar_emoji = normalizeEmoji(input.avatar_emoji)
   if (input.card_pattern !== undefined) value.card_pattern = normalizePattern(input.card_pattern)
+  if (input.profile_cover !== undefined) value.profile_cover = normalizeCover(input.profile_cover)
   return value
 }
 
@@ -237,6 +364,11 @@ export function validateProfile(input: ProfileInput): string | null {
   if (value.card_pattern !== undefined) {
     const patternError = validatePattern(value.card_pattern)
     if (patternError) return patternError
+  }
+
+  if (value.profile_cover !== undefined) {
+    const coverError = validateCover(value.profile_cover)
+    if (coverError) return coverError
   }
 
   return null

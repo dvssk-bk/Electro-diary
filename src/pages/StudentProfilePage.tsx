@@ -22,7 +22,7 @@ import { useToast } from '../context/ToastContext'
 import { backend } from '../lib/api'
 import { formatBirthday } from '../lib/birthday'
 import { prepareAvatar } from '../lib/avatar'
-import { PASSWORD_LIMITS, PROFILE_LIMITS, profileCardStyle, validatePassword, validateProfile } from '../lib/profile'
+import { PASSWORD_LIMITS, PROFILE_LIMITS, coverStyle, profileCardStyle, validatePassword, validateProfile } from '../lib/profile'
 import { joinName, splitName, validateFullName } from '../lib/name'
 
 export function StudentProfilePage() {
@@ -174,6 +174,8 @@ export function StudentProfilePage() {
     }
   }
 
+  const cover = coverStyle(profile.profile_cover)
+
   return (
     <AppShell role="student">
       <div className="page-head">
@@ -190,7 +192,8 @@ export function StudentProfilePage() {
       </div>
 
       <div className="profile-layout" style={profileCardStyle(profile.accent_color, profile.card_pattern)}>
-        <aside className="profile-card">
+        <aside className={`profile-card${cover ? ' profile-card--cover' : ''}`}>
+          {cover ? <div className="profile-cover" style={cover} aria-hidden="true" /> : null}
           <Avatar profile={profile} size="xl" />
           <h2>{profile.full_name}</h2>
           <span className="badge badge--blue">

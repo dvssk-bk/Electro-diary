@@ -7,14 +7,18 @@ import { useToast } from '../context/ToastContext'
 import { backend } from '../lib/api'
 import { MONTHS_NOM, daysInMonth, formatBirthday } from '../lib/birthday'
 import {
+  PROFILE_GRADIENTS,
   accentStyle,
+  coverStyle,
   normalizeAccent,
+  normalizeCover,
   normalizeEmoji,
   normalizeFrame,
   normalizePattern,
   patternStyle,
   validateAccent,
   validateBirthday,
+  validateCover,
   validateEmoji,
   validateFrame,
   validatePattern,
@@ -48,15 +52,13 @@ const ACCENT_PRESETS = [
 const FALLBACK_COLORS = { color1: '#58a6ff', color2: '#c77dff' }
 const ACCENT_FALLBACK = { color1: '#3b82f6', color2: '#8b5cf6' }
 
-/** Градиентные фоны карточки: превью рисуется той же CSS-переменной, что и профиль. */
-const PATTERN_PRESETS = [
-  { value: '', label: 'Без фона' },
-  { value: 'sunset', label: 'Закат' },
-  { value: 'mint', label: 'Мята' },
-  { value: 'lavender', label: 'Лаванда' },
-  { value: 'sky', label: 'Небо' },
-  { value: 'peach', label: 'Персик' },
-]
+/** Варианты фона и обложки берём из общего каталога градиентов. */
+const GRADIENT_PRESETS = PROFILE_GRADIENTS.map((item) => ({
+  value: item.value,
+  label: item.label,
+}))
+const PATTERN_PRESETS = [{ value: '', label: 'Без фона' }, ...GRADIENT_PRESETS]
+const COVER_PRESETS = [{ value: '', label: 'Без обложки' }, ...GRADIENT_PRESETS]
 
 /** Эмодзи для аватара, когда фото не загружено. */
 const EMOJI_PRESETS = [
@@ -142,6 +144,10 @@ export function ProfileExtrasForm({
   const [accentSaving, setAccentSaving] = useState(false)
   const [accentError, setAccentError] = useState('')
 
+  const [cover, setCover] = useState(normalizeCover(profile.profile_cover) ?? '')
+  const [coverSaving, setCoverSaving] = useState(false)
+  const [coverError, setCoverError] = useState('')
+
   const [pattern, setPattern] = useState(normalizePattern(profile.card_pattern) ?? '')
   const [patternSaving, setPatternSaving] = useState(false)
   const [patternError, setPatternError] = useState('')
@@ -180,6 +186,28 @@ export function ProfileExtrasForm({
       setAccentError((err as Error).message)
     } finally {
       setAccentSaving(false)
+    }
+  }
+
+  const saveCover = async (event: FormEvent) => {
+    event.preventDefault()
+    setCoverError('')
+    const value = cover || null
+    const message = validateCover(value)
+    if (message) {
+      setCoverError(message)
+      return
+    }
+    setCoverSaving(true)
+    try {
+      const updated = await backend.profiles.updateMine({ profile_cover: value })
+      await refreshProfile()
+      onSaved?.(updated)
+      toast.success(value ? 'Обложка сохранена' : 'Обложка убрана')
+    } catch (err) {
+      setCoverError((err as Error).message)
+    } finally {
+      setCoverSaving(false)
     }
   }
 
@@ -284,6 +312,46 @@ export function ProfileExtrasForm({
 
   return (
     <>
+      <form className="profile-form" onSubmit={saveCover} hidden={!showAppearance}>
+        <div>
+          <span className="eyebrow">Оформление</span>
+          <h2>Обложка профиля</h2>
+          <p className="muted">
+            Градиентная полоса над аватаром. Обложку видят все, кто открывает профиль; на
+            читаемость имени и контактов она не влияет.
+          </p>
+        </div>
+
+        <div className="cover-grid" role="group" aria-label="Обложка профиля">
+          {COVER_PRESETS.map((preset) => (
+            <button
+              key={preset.value || 'none'}
+              type="button"
+              className="cover-choice"
+              style={coverStyle(preset.value)}
+              aria-pressed={cover === preset.value}
+              onClick={() => setCover(preset.value)}
+            >
+              <span
+                className="cover-choice__preview"
+                aria-hidden="true"
+                style={preset.value ? undefined : { backgroundImage: 'none' }}
+              />
+              <span>{preset.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {coverError ? <ErrorBox>{coverError}</ErrorBox> : null}
+
+        <div className="profile-form__actions">
+          <button type="submit" className="btn btn--primary" disabled={coverSaving}>
+            {coverSaving ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
+            Сохранить обложку
+          </button>
+        </div>
+      </form>
+
       <form className="profile-form" onSubmit={saveAccent} hidden={!showAppearance}>
         <div>
           <span className="eyebrow">Оформление</span>
@@ -386,8 +454,8 @@ export function ProfileExtrasForm({
           <span className="eyebrow">Оформление</span>
           <h2>Фон карточки</h2>
           <p className="muted">
-            Мягкий градиент для карточки и панели профиля. Цвета подобраны светлыми, поэтому
-            текст и контакты остаются читаемыми.
+            Градиент для карточки и панели профиля. Цвет текста подбирается автоматически:
+            на светлых фонах он тёмный, на насыщенных — светлый.
           </p>
         </div>
 

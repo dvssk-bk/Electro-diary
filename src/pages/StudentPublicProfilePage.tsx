@@ -9,7 +9,7 @@ import { backend } from '../lib/api'
 import { formatBirthday } from '../lib/birthday'
 import { formatDate } from '../lib/format'
 import { splitName } from '../lib/name'
-import { profileCardStyle } from '../lib/profile'
+import { coverStyle, profileCardStyle } from '../lib/profile'
 import type { Profile } from '../lib/types'
 
 export function StudentPublicProfilePage() {
@@ -60,6 +60,7 @@ export function StudentPublicProfilePage() {
         : '/journal'
   const isSelf = Boolean(profile && student && profile.id === student.id)
   const parts = splitName(student?.full_name ?? '')
+  const cover = coverStyle(student?.profile_cover)
 
   return (
     <AppShell role={profile?.role ?? 'student'}>
@@ -82,7 +83,8 @@ export function StudentPublicProfilePage() {
         <ErrorBox>{error || 'Студент не найден'}</ErrorBox>
       ) : (
         <div className="profile-layout" style={profileCardStyle(student.accent_color, student.card_pattern)}>
-          <aside className="profile-card">
+          <aside className={`profile-card${cover ? ' profile-card--cover' : ''}`}>
+            {cover ? <div className="profile-cover" style={cover} aria-hidden="true" /> : null}
             <Avatar profile={student} size="xl" />
             <h2>{student.full_name}</h2>
             <span className="badge badge--blue">

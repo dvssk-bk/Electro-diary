@@ -58,6 +58,7 @@ interface ProfileRow {
   accent_color: string | null
   avatar_emoji: string | null
   card_pattern: string | null
+  profile_cover: string | null
 }
 
 function avatarPublicUrl(path: string | null | undefined): string | null {
@@ -82,11 +83,12 @@ function mapProfile(row: ProfileRow): Profile {
     accent_color: row.accent_color,
     avatar_emoji: row.avatar_emoji,
     card_pattern: row.card_pattern,
+    profile_cover: row.profile_cover,
   }
 }
 
 const PROFILE_SELECT =
-  'id, role, full_name, group_name, created_at, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame, accent_color, avatar_emoji, card_pattern'
+  'id, role, full_name, group_name, created_at, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame, accent_color, avatar_emoji, card_pattern, profile_cover'
 
 async function fetchProfile(id: string): Promise<Profile | null> {
   const { data, error } = await client()
@@ -758,7 +760,7 @@ export const supabaseBackend: Backend = {
       const { data, error } = await client()
         .from('teacher_profiles')
         .select(
-          'id, full_name, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame, accent_color, avatar_emoji, card_pattern, created_at',
+          'id, full_name, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame, accent_color, avatar_emoji, card_pattern, profile_cover, created_at',
         )
         .eq('id', id)
         .maybeSingle()
@@ -780,6 +782,7 @@ export const supabaseBackend: Backend = {
         accent_color: row.accent_color,
         avatar_emoji: row.avatar_emoji,
         card_pattern: row.card_pattern,
+        profile_cover: row.profile_cover,
       }
     },
     async getStudent(id: string): Promise<Profile | null> {
