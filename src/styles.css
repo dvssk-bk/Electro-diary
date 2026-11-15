@@ -5741,7 +5741,7 @@ svg {
   padding: 4px;
   margin-bottom: 20px;
   border-radius: 12px;
-  background: #f4efe5;
+  background: var(--profile-tabs-bg, #f4efe5);
 }
 
 .profile-tab {
@@ -5752,7 +5752,7 @@ svg {
   border: 0;
   border-radius: 9px;
   background: transparent;
-  color: var(--ink-soft);
+  color: var(--profile-text-soft, var(--ink-soft));
   font: inherit;
   font-size: 13px;
   font-weight: 600;
@@ -5761,12 +5761,13 @@ svg {
 }
 
 .profile-tab:hover {
-  color: var(--navy-950);
+  background: var(--profile-tab-hover-bg, rgba(255, 253, 248, 0.6));
+  color: var(--profile-text, var(--navy-950));
 }
 
 .profile-tab[aria-selected='true'] {
-  background: #fffdf8;
-  color: var(--navy-950);
+  background: var(--profile-tab-active-bg, #fffdf8);
+  color: var(--profile-text, var(--navy-950));
   box-shadow: 0 2px 6px rgba(30, 45, 64, 0.1);
 }
 

@@ -187,12 +187,18 @@ function gradientTextStyle(css: string): CSSProperties {
         '--profile-text-soft': '#dce7f2',
         '--profile-link': '#b9ddff',
         '--profile-line': 'rgba(255, 255, 255, 0.24)',
+        '--profile-tabs-bg': 'rgba(255, 255, 255, 0.1)',
+        '--profile-tab-hover-bg': 'rgba(255, 255, 255, 0.14)',
+        '--profile-tab-active-bg': 'rgba(255, 255, 255, 0.2)',
       } as CSSProperties)
     : ({
         '--profile-text': '#14253d',
         '--profile-text-soft': '#4f6072',
         '--profile-link': '#1f5d8f',
         '--profile-line': '#eee6d7',
+        '--profile-tabs-bg': 'rgba(255, 253, 248, 0.7)',
+        '--profile-tab-hover-bg': 'rgba(255, 255, 255, 0.85)',
+        '--profile-tab-active-bg': '#fffdf8',
       } as CSSProperties)
 }
 
