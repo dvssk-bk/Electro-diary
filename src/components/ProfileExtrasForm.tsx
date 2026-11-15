@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from 'react'
-import { Loader2, Save } from 'lucide-react'
+import { Fragment, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { ImagePlus, Loader2, Save, Trash2 } from 'lucide-react'
 import { Avatar } from './Avatar'
 import { ErrorBox } from './Feedback'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { backend } from '../lib/api'
+import { prepareCover } from '../lib/avatar'
 import { MONTHS_NOM, daysInMonth, formatBirthday } from '../lib/birthday'
 import {
   PROFILE_GRADIENTS,
@@ -145,8 +146,13 @@ export function ProfileExtrasForm({
   const [accentError, setAccentError] = useState('')
 
   const [cover, setCover] = useState(normalizeCover(profile.profile_cover) ?? '')
+  const [coverMode, setCoverMode] = useState<'gradient' | 'image' | 'none'>(
+    profile.profile_cover_url ? 'image' : normalizeCover(profile.profile_cover) ? 'gradient' : 'none',
+  )
   const [coverSaving, setCoverSaving] = useState(false)
+  const [coverUploading, setCoverUploading] = useState(false)
   const [coverError, setCoverError] = useState('')
+  const coverInputRef = useRef<HTMLInputElement | null>(null)
 
   const [pattern, setPattern] = useState(normalizePattern(profile.card_pattern) ?? '')
   const [patternSaving, setPatternSaving] = useState(false)
@@ -192,7 +198,8 @@ export function ProfileExtrasForm({
   const saveCover = async (event: FormEvent) => {
     event.preventDefault()
     setCoverError('')
-    const value = cover || null
+    if (coverMode === 'image') return
+    const value = coverMode === 'none' ? null : cover || null
     const message = validateCover(value)
     if (message) {
       setCoverError(message)
@@ -200,14 +207,58 @@ export function ProfileExtrasForm({
     }
     setCoverSaving(true)
     try {
+      // Своя картинка важнее градиента, поэтому перед сохранением градиента
+      // (или «Без обложки») удаляем загруженный файл.
+      if (profile.profile_cover_url) {
+        await backend.profiles.removeCover()
+      }
       const updated = await backend.profiles.updateMine({ profile_cover: value })
       await refreshProfile()
       onSaved?.(updated)
+      setCoverMode(value ? 'gradient' : 'none')
       toast.success(value ? 'Обложка сохранена' : 'Обложка убрана')
     } catch (err) {
       setCoverError((err as Error).message)
     } finally {
       setCoverSaving(false)
+    }
+  }
+
+  const chooseCoverFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setCoverError('')
+    setCoverUploading(true)
+    try {
+      const prepared = await prepareCover(file)
+      const updated = await backend.profiles.uploadCover(prepared)
+      await refreshProfile()
+      onSaved?.(updated)
+      setCoverMode('image')
+      toast.success('Своя обложка сохранена')
+    } catch (err) {
+      setCoverError((err as Error).message)
+    } finally {
+      setCoverUploading(false)
+    }
+  }
+
+  const removeCoverImage = async () => {
+    setCoverError('')
+    setCoverUploading(true)
+    try {
+      const updated = await backend.profiles.removeCover()
+      await refreshProfile()
+      onSaved?.(updated)
+      const saved = normalizeCover(updated.profile_cover) ?? ''
+      setCover(saved)
+      setCoverMode(saved ? 'gradient' : 'none')
+      toast.success('Своя обложка удалена')
+    } catch (err) {
+      setCoverError((err as Error).message)
+    } finally {
+      setCoverUploading(false)
     }
   }
 
@@ -317,39 +368,107 @@ export function ProfileExtrasForm({
           <span className="eyebrow">Оформление</span>
           <h2>Обложка профиля</h2>
           <p className="muted">
-            Градиентная полоса над аватаром. Обложку видят все, кто открывает профиль; на
-            читаемость имени и контактов она не влияет.
+            Полоса над аватаром: готовый градиент или своя картинка. Обложку видят все, кто
+            открывает профиль; на читаемость имени и контактов она не влияет.
           </p>
         </div>
 
         <div className="cover-grid" role="group" aria-label="Обложка профиля">
-          {COVER_PRESETS.map((preset) => (
+          {COVER_PRESETS.map((preset, index) => {
+            const selected =
+              coverMode === (preset.value ? 'gradient' : 'none') && cover === preset.value
+            return (
+              <Fragment key={preset.value || 'none'}>
+                <button
+                  type="button"
+                  className="cover-choice"
+                  style={coverStyle(preset.value)}
+                  aria-pressed={selected}
+                  onClick={() => {
+                    setCover(preset.value)
+                    setCoverMode(preset.value ? 'gradient' : 'none')
+                  }}
+                >
+                  <span
+                    className="cover-choice__preview"
+                    aria-hidden="true"
+                    style={preset.value ? undefined : { backgroundImage: 'none' }}
+                  />
+                  <span>{preset.label}</span>
+                </button>
+
+                {index === 0 ? (
+                  <button
+                    type="button"
+                    className="cover-choice cover-choice--upload"
+                    aria-pressed={coverMode === 'image'}
+                    onClick={() => coverInputRef.current?.click()}
+                    disabled={coverUploading}
+                  >
+                    {profile.profile_cover_url ? (
+                      <span
+                        className="cover-choice__preview"
+                        aria-hidden="true"
+                        style={{ backgroundImage: `url("${profile.profile_cover_url}")` }}
+                      />
+                    ) : (
+                      <span
+                        className="cover-choice__preview cover-choice__preview--empty"
+                        aria-hidden="true"
+                      >
+                        {coverUploading ? (
+                          <Loader2 className="spin" size={16} />
+                        ) : (
+                          <ImagePlus size={16} />
+                        )}
+                      </span>
+                    )}
+                    <span>{profile.profile_cover_url ? 'Своя' : 'Своя картинка'}</span>
+                  </button>
+                ) : null}
+              </Fragment>
+            )
+          })}
+        </div>
+
+        <input
+          ref={coverInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={chooseCoverFile}
+          hidden
+        />
+
+        <div className="cover-hint">
+          <span className="muted">
+            JPG, PNG или WebP до 10 МБ. Картинка обрезается по центру до 1200×480.
+          </span>
+          {profile.profile_cover_url ? (
             <button
-              key={preset.value || 'none'}
               type="button"
-              className="cover-choice"
-              style={coverStyle(preset.value)}
-              aria-pressed={cover === preset.value}
-              onClick={() => setCover(preset.value)}
+              className="btn btn--ghost btn--sm"
+              onClick={removeCoverImage}
+              disabled={coverUploading}
             >
-              <span
-                className="cover-choice__preview"
-                aria-hidden="true"
-                style={preset.value ? undefined : { backgroundImage: 'none' }}
-              />
-              <span>{preset.label}</span>
+              <Trash2 size={14} /> Удалить свою обложку
             </button>
-          ))}
+          ) : null}
         </div>
 
         {coverError ? <ErrorBox>{coverError}</ErrorBox> : null}
 
-        <div className="profile-form__actions">
-          <button type="submit" className="btn btn--primary" disabled={coverSaving}>
-            {coverSaving ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
-            Сохранить обложку
-          </button>
-        </div>
+        {coverMode === 'image' ? (
+          <p className="muted profile-form__note">
+            Своя обложка применяется сразу — сохранять её не нужно.
+          </p>
+        ) : (
+          <div className="profile-form__actions">
+            <button type="submit" className="btn btn--primary" disabled={coverSaving}>
+              {coverSaving ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
+              Сохранить обложку
+            </button>
+          </div>
+        )}
       </form>
 
       <form className="profile-form" onSubmit={saveAccent} hidden={!showAppearance}>

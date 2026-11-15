@@ -190,6 +190,11 @@ function gradientTextStyle(css: string): CSSProperties {
         '--profile-tabs-bg': 'rgba(255, 255, 255, 0.1)',
         '--profile-tab-hover-bg': 'rgba(255, 255, 255, 0.14)',
         '--profile-tab-active-bg': 'rgba(255, 255, 255, 0.2)',
+        '--profile-surface': 'rgba(255, 255, 255, 0.12)',
+        '--profile-surface-strong': 'rgba(255, 255, 255, 0.86)',
+        '--profile-surface-active': 'rgba(255, 255, 255, 0.26)',
+        '--profile-border': 'rgba(255, 255, 255, 0.3)',
+        '--profile-focus': '#ffffff',
       } as CSSProperties)
     : ({
         '--profile-text': '#14253d',
@@ -199,6 +204,11 @@ function gradientTextStyle(css: string): CSSProperties {
         '--profile-tabs-bg': 'rgba(255, 253, 248, 0.7)',
         '--profile-tab-hover-bg': 'rgba(255, 255, 255, 0.85)',
         '--profile-tab-active-bg': '#fffdf8',
+        '--profile-surface': 'rgba(255, 253, 248, 0.72)',
+        '--profile-surface-strong': '#ffffff',
+        '--profile-surface-active': '#fffdf8',
+        '--profile-border': 'rgba(20, 37, 61, 0.16)',
+        '--profile-focus': '#1e2d40',
       } as CSSProperties)
 }
 
@@ -239,8 +249,18 @@ export function patternStyle(pattern: string | null | undefined): CSSProperties 
   } as CSSProperties
 }
 
-/** CSS-переменная обложки профиля. */
-export function coverStyle(cover: string | null | undefined): CSSProperties | undefined {
+/**
+ * CSS-переменная обложки профиля: своя картинка важнее градиента.
+ * Путь экранируем, чтобы кавычки в URL не ломали CSS.
+ */
+export function coverStyle(
+  cover: string | null | undefined,
+  imageUrl?: string | null,
+): CSSProperties | undefined {
+  if (imageUrl) {
+    const safe = imageUrl.replace(/["\\]/g, '\\$&')
+    return { '--profile-cover': `url("${safe}")` } as CSSProperties
+  }
   const gradient = findGradient(cover)
   return gradient ? ({ '--profile-cover': gradient.css } as CSSProperties) : undefined
 }

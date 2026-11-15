@@ -174,7 +174,7 @@ export function StudentProfilePage() {
     }
   }
 
-  const cover = coverStyle(profile.profile_cover)
+  const cover = coverStyle(profile.profile_cover, profile.profile_cover_url)
 
   return (
     <AppShell role="student">

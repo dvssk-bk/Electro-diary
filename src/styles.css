@@ -5638,6 +5638,7 @@ svg {
   height: 132px;
   background-image: var(--profile-cover, none);
   background-repeat: no-repeat;
+  background-position: center;
   background-size: cover;
   pointer-events: none;
 }
@@ -5876,6 +5877,46 @@ svg {
 .profile-layout .profile-readonly__contacts,
 .profile-layout .profile-form__actions {
   border-top-color: var(--profile-line, #eee6d7);
+}
+
+/* Плитки выбора (эмодзи, градиент, обложка) и рамка аватара: на тёмном
+   градиенте белые карточки смотрелись бы инородно, поэтому поверхность,
+   границы и активное состояние тоже берут цвета из автоконтраста. */
+.profile-layout .profile-panel .cover-choice,
+.profile-layout .profile-panel .pattern-choice,
+.profile-layout .profile-panel .emoji-choice,
+.profile-layout .profile-panel .frame-editor__preview {
+  border-color: var(--profile-border, var(--line-strong));
+  background: var(--profile-surface, #fffdf8);
+  color: var(--profile-text-soft, var(--muted));
+}
+
+.profile-layout .profile-panel .cover-choice[aria-pressed='true'],
+.profile-layout .profile-panel .pattern-choice[aria-pressed='true'],
+.profile-layout .profile-panel .emoji-choice[aria-pressed='true'] {
+  border-color: var(--profile-focus, var(--navy-600));
+  box-shadow: 0 0 0 1px var(--profile-focus, var(--navy-600));
+  background: var(--profile-surface-active, #fffdf8);
+  color: var(--profile-text, var(--navy-900));
+}
+
+.profile-layout .profile-panel .cover-choice__preview,
+.profile-layout .profile-panel .pattern-choice__preview {
+  background-color: var(--profile-surface-strong, #f7f2e8);
+}
+
+.profile-layout .profile-panel .color-well input[type='color'] {
+  border-color: var(--profile-border, var(--line-strong));
+  background: var(--profile-surface-strong, #fff);
+}
+
+.profile-layout .profile-panel .frame-swatch {
+  border-color: var(--profile-surface-strong, #fff);
+  box-shadow: 0 0 0 1px var(--profile-border, var(--line-strong));
+}
+
+.profile-layout .profile-panel .frame-swatch[aria-pressed='true'] {
+  box-shadow: 0 0 0 2px var(--profile-focus, var(--navy-600));
 }
 
 .profile-readonly {
@@ -7471,7 +7512,42 @@ body.has-season-garland .admin-login {
   background-color: #f7f2e8;
   background-image: var(--profile-cover, none);
   background-repeat: no-repeat;
+  background-position: center;
   background-size: cover;
+}
+
+.cover-choice--upload {
+  border-style: dashed;
+}
+
+.cover-choice--upload:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.cover-choice__preview--empty {
+  display: grid;
+  place-items: center;
+  color: #4f6072;
+}
+
+.cover-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cover-hint .muted {
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.profile-form__note {
+  padding-top: 12px;
+  border-top: 1px solid var(--profile-line, #eee6d7);
+  font-size: 12px;
 }
 
 .pattern-grid {

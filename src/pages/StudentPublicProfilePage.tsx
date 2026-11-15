@@ -60,7 +60,7 @@ export function StudentPublicProfilePage() {
         : '/journal'
   const isSelf = Boolean(profile && student && profile.id === student.id)
   const parts = splitName(student?.full_name ?? '')
-  const cover = coverStyle(student?.profile_cover)
+  const cover = coverStyle(student?.profile_cover, student?.profile_cover_url)
 
   return (
     <AppShell role={profile?.role ?? 'student'}>

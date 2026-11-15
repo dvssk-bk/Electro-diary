@@ -59,3 +59,44 @@ export function readFileAsDataUrl(file: File): Promise<string> {
     reader.readAsDataURL(file)
   })
 }
+
+const COVER_WIDTH = 1200
+const COVER_HEIGHT = 480
+export const COVER_MAX_BYTES = 2 * 1024 * 1024
+
+/**
+ * Готовит свою обложку профиля: обрезает по центру до 1200×480 и сжимает
+ * в JPEG, чтобы файл укладывался в лимит бакета (2 МБ).
+ */
+export async function prepareCover(file: File): Promise<File> {
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+    throw new Error('Для обложки подойдёт JPG, PNG или WebP')
+  }
+  if (file.size > INPUT_LIMIT_BYTES) {
+    throw new Error('Исходное изображение должно быть меньше 10 МБ')
+  }
+
+  const image = await loadImage(file)
+  const canvas = document.createElement('canvas')
+  canvas.width = COVER_WIDTH
+  canvas.height = COVER_HEIGHT
+  const context = canvas.getContext('2d')
+  if (!context) throw new Error('Браузер не смог обработать изображение')
+
+  const scale = Math.max(COVER_WIDTH / image.naturalWidth, COVER_HEIGHT / image.naturalHeight)
+  const width = image.naturalWidth * scale
+  const height = image.naturalHeight * scale
+  context.fillStyle = '#fffdf8'
+  context.fillRect(0, 0, COVER_WIDTH, COVER_HEIGHT)
+  context.drawImage(image, (COVER_WIDTH - width) / 2, (COVER_HEIGHT - height) / 2, width, height)
+
+  const blob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, 'image/jpeg', 0.84)
+  })
+  if (!blob) throw new Error('Не удалось подготовить обложку')
+  if (blob.size > COVER_MAX_BYTES) {
+    throw new Error('Обложка получилась больше 2 МБ. Выберите другое изображение.')
+  }
+
+  return new File([blob], 'cover.jpg', { type: 'image/jpeg' })
+}

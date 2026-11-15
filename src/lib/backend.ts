@@ -72,6 +72,9 @@ export interface Backend {
     updateFullName: (fullName: string) => Promise<Profile>
     uploadAvatar: (file: File) => Promise<Profile>
     removeAvatar: () => Promise<Profile>
+    /** Своя картинка обложки: файл уже подготовлен (1200×480 JPEG). */
+    uploadCover: (file: File) => Promise<Profile>
+    removeCover: () => Promise<Profile>
   }
   groups: {
     list: () => Promise<Group[]>

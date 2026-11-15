@@ -59,6 +59,7 @@ interface ProfileRow {
   avatar_emoji: string | null
   card_pattern: string | null
   profile_cover: string | null
+  profile_cover_path: string | null
 }
 
 function avatarPublicUrl(path: string | null | undefined): string | null {
@@ -84,11 +85,12 @@ function mapProfile(row: ProfileRow): Profile {
     avatar_emoji: row.avatar_emoji,
     card_pattern: row.card_pattern,
     profile_cover: row.profile_cover,
+    profile_cover_url: avatarPublicUrl(row.profile_cover_path),
   }
 }
 
 const PROFILE_SELECT =
-  'id, role, full_name, group_name, created_at, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame, accent_color, avatar_emoji, card_pattern, profile_cover'
+  'id, role, full_name, group_name, created_at, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame, accent_color, avatar_emoji, card_pattern, profile_cover, profile_cover_path'
 
 async function fetchProfile(id: string): Promise<Profile | null> {
   const { data, error } = await client()
@@ -760,7 +762,7 @@ export const supabaseBackend: Backend = {
       const { data, error } = await client()
         .from('teacher_profiles')
         .select(
-          'id, full_name, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame, accent_color, avatar_emoji, card_pattern, profile_cover, created_at',
+          'id, full_name, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame, accent_color, avatar_emoji, card_pattern, profile_cover, profile_cover_path, created_at',
         )
         .eq('id', id)
         .maybeSingle()
@@ -783,6 +785,7 @@ export const supabaseBackend: Backend = {
         avatar_emoji: row.avatar_emoji,
         card_pattern: row.card_pattern,
         profile_cover: row.profile_cover,
+        profile_cover_url: avatarPublicUrl(row.profile_cover_path),
       }
     },
     async getStudent(id: string): Promise<Profile | null> {
@@ -883,6 +886,60 @@ export const supabaseBackend: Backend = {
       const { data, error } = await db
         .from('profiles')
         .update({ avatar_path: null })
+        .eq('id', user.id)
+        .select(PROFILE_SELECT)
+        .single()
+      if (error) throw new Error(error.message)
+      if (oldPath) await db.storage.from('avatars').remove([oldPath])
+      return { ...mapProfile(data as ProfileRow), login: user.login }
+    },
+    async uploadCover(file: File): Promise<Profile> {
+      const user = await requireProfile()
+      const db = client()
+      const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
+      const path = `${user.id}/cover-${crypto.randomUUID()}.${ext}`
+      const { error: uploadError } = await db.storage.from('avatars').upload(path, file, {
+        contentType: file.type,
+        upsert: false,
+      })
+      if (uploadError) throw new Error(uploadError.message)
+
+      const { data: old } = await db
+        .from('profiles')
+        .select('profile_cover_path')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      const { data, error } = await db
+        .from('profiles')
+        .update({ profile_cover_path: path })
+        .eq('id', user.id)
+        .select(PROFILE_SELECT)
+        .single()
+      if (error) {
+        await db.storage.from('avatars').remove([path])
+        throw new Error(error.message)
+      }
+
+      const oldPath = (old as { profile_cover_path: string | null } | null)?.profile_cover_path ?? null
+      if (oldPath && oldPath !== path) {
+        await db.storage.from('avatars').remove([oldPath])
+      }
+      return { ...mapProfile(data as ProfileRow), login: user.login }
+    },
+    async removeCover(): Promise<Profile> {
+      const user = await requireProfile()
+      const db = client()
+      const { data: old } = await db
+        .from('profiles')
+        .select('profile_cover_path')
+        .eq('id', user.id)
+        .maybeSingle()
+      const oldPath = (old as { profile_cover_path: string | null } | null)?.profile_cover_path ?? null
+
+      const { data, error } = await db
+        .from('profiles')
+        .update({ profile_cover_path: null })
         .eq('id', user.id)
         .select(PROFILE_SELECT)
         .single()

@@ -94,6 +94,7 @@ export function loadDb(): DemoDb {
           user.profile.avatar_emoji ??= null
           user.profile.card_pattern ??= null
           user.profile.profile_cover ??= null
+          user.profile.profile_cover_url ??= null
         }
         cache = parsed
         saveDb()
@@ -108,6 +109,7 @@ export function loadDb(): DemoDb {
         parsed.groupViewers ??= []
         for (const user of parsed.users) {
           user.profile.profile_cover ??= null
+          user.profile.profile_cover_url ??= null
         }
         cache = parsed
         return cache
@@ -166,6 +168,7 @@ export function coerceProfile(value: Profile): Profile {
     avatar_emoji: value.avatar_emoji ?? null,
     card_pattern: value.card_pattern ?? null,
     profile_cover: value.profile_cover ?? null,
+    profile_cover_url: value.profile_cover_url ?? null,
   }
 }
 

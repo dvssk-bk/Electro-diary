@@ -25,6 +25,8 @@ export interface Profile {
   card_pattern?: string | null
   /** Градиентная обложка над аватаром; значения из общего каталога градиентов. */
   profile_cover?: string | null
+  /** Своя картинка обложки; показывается вместо градиента, если загружена. */
+  profile_cover_url?: string | null
 }
 
 /**

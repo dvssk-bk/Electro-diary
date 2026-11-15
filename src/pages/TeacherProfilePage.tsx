@@ -181,7 +181,7 @@ export function TeacherProfilePage({ self = false }: { self?: boolean }) {
   }
 
   const backTo = profile?.role === 'admin' ? '/admin/journal' : '/journal'
-  const cover = coverStyle(teacher?.profile_cover)
+  const cover = coverStyle(teacher?.profile_cover, teacher?.profile_cover_url)
 
   return (
     <AppShell role={profile?.role ?? 'student'}>

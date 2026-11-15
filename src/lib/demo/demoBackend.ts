@@ -743,6 +743,27 @@ export const demoBackend: Backend = {
       emit()
       return { ...coerceProfile(user.profile), login: user.login }
     },
+    async uploadCover(file: File) {
+      const profile = requireSession()
+      const db = loadDb()
+      const user = db.users.find((item) => item.profile.id === profile.id)
+      if (!user) throw new Error('Профиль не найден')
+      const dataUrl = await readFileAsDataUrl(file)
+      user.profile.profile_cover_url = dataUrl
+      saveDb()
+      emit()
+      return { ...coerceProfile(user.profile), login: user.login }
+    },
+    async removeCover() {
+      const profile = requireSession()
+      const db = loadDb()
+      const user = db.users.find((item) => item.profile.id === profile.id)
+      if (!user) throw new Error('Профиль не найден')
+      user.profile.profile_cover_url = null
+      saveDb()
+      emit()
+      return { ...coerceProfile(user.profile), login: user.login }
+    },
   },
 
   groups: {
