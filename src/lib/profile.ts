@@ -204,7 +204,7 @@ function gradientTextStyle(css: string): CSSProperties {
         '--profile-tabs-bg': 'rgba(255, 253, 248, 0.7)',
         '--profile-tab-hover-bg': 'rgba(255, 255, 255, 0.85)',
         '--profile-tab-active-bg': '#fffdf8',
-        '--profile-surface': 'rgba(255, 253, 248, 0.72)',
+        '--profile-surface': 'rgba(255, 253, 248, 0.62)',
         '--profile-surface-strong': '#ffffff',
         '--profile-surface-active': '#fffdf8',
         '--profile-border': 'rgba(20, 37, 61, 0.16)',

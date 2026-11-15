@@ -584,14 +584,19 @@ export function ProfileExtrasForm({
               key={preset.value || 'none'}
               type="button"
               className="pattern-choice"
-              style={patternStyle(preset.value)}
               aria-pressed={pattern === preset.value}
               onClick={() => setPattern(preset.value)}
             >
+              {/* Переменные градиента вешаем на превью, а не на кнопку: иначе
+                  тёмный образец красил бы подпись «Графит» в белый на светлой теме. */}
               <span
                 className="pattern-choice__preview"
                 aria-hidden="true"
-                style={preset.value ? undefined : { backgroundImage: 'none' }}
+                style={
+                  preset.value
+                    ? patternStyle(preset.value)
+                    : { backgroundImage: 'none', color: '#14253d' }
+                }
               >
                 Aa
               </span>
