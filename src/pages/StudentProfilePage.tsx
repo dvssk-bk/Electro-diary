@@ -174,7 +174,13 @@ export function StudentProfilePage() {
     }
   }
 
-  const cover = coverStyle(profile.profile_cover, profile.profile_cover_url)
+  const cover = coverStyle(
+    profile.profile_cover,
+    profile.profile_cover_url,
+    profile.profile_cover_zoom,
+    profile.profile_cover_x,
+    profile.profile_cover_y,
+  )
 
   return (
     <AppShell role="student">
@@ -193,7 +199,11 @@ export function StudentProfilePage() {
 
       <div className="profile-layout" style={profileCardStyle(profile.accent_color, profile.card_pattern)}>
         <aside className={`profile-card${cover ? ' profile-card--cover' : ''}`}>
-          {cover ? <div className="profile-cover" style={cover} aria-hidden="true" /> : null}
+          {cover ? (
+            <div className="profile-cover" style={cover} aria-hidden="true">
+              <span className="profile-cover__image" />
+            </div>
+          ) : null}
           <Avatar profile={profile} size="xl" />
           <h2>{profile.full_name}</h2>
           <span className="badge badge--blue">

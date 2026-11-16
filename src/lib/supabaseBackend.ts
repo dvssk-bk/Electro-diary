@@ -8,6 +8,7 @@ import type {
   ExtraLeaderboardEntry,
   ExtraSubmission,
   ExtraWorkRow,
+  GradeAppeal,
   Group,
   JournalData,
   NewAssignment,
@@ -60,6 +61,10 @@ interface ProfileRow {
   card_pattern: string | null
   profile_cover: string | null
   profile_cover_path: string | null
+  profile_cover_zoom: number | null
+  profile_cover_x: number | null
+  profile_cover_y: number | null
+  page_background: string | null
 }
 
 function avatarPublicUrl(path: string | null | undefined): string | null {
@@ -86,11 +91,15 @@ function mapProfile(row: ProfileRow): Profile {
     card_pattern: row.card_pattern,
     profile_cover: row.profile_cover,
     profile_cover_url: avatarPublicUrl(row.profile_cover_path),
+    profile_cover_zoom: row.profile_cover_zoom,
+    profile_cover_x: row.profile_cover_x,
+    profile_cover_y: row.profile_cover_y,
+    page_background: row.page_background,
   }
 }
 
 const PROFILE_SELECT =
-  'id, role, full_name, group_name, created_at, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame, accent_color, avatar_emoji, card_pattern, profile_cover, profile_cover_path'
+  'id, role, full_name, group_name, created_at, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame, accent_color, avatar_emoji, card_pattern, profile_cover, profile_cover_path, profile_cover_zoom, profile_cover_x, profile_cover_y, page_background'
 
 async function fetchProfile(id: string): Promise<Profile | null> {
   const { data, error } = await client()
@@ -762,7 +771,7 @@ export const supabaseBackend: Backend = {
       const { data, error } = await client()
         .from('teacher_profiles')
         .select(
-          'id, full_name, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame, accent_color, avatar_emoji, card_pattern, profile_cover, profile_cover_path, created_at',
+          'id, full_name, avatar_path, contact_email, phone, bio, birthday_md, avatar_frame, accent_color, avatar_emoji, card_pattern, profile_cover, profile_cover_path, profile_cover_zoom, profile_cover_x, profile_cover_y, page_background, created_at',
         )
         .eq('id', id)
         .maybeSingle()
@@ -786,6 +795,10 @@ export const supabaseBackend: Backend = {
         card_pattern: row.card_pattern,
         profile_cover: row.profile_cover,
         profile_cover_url: avatarPublicUrl(row.profile_cover_path),
+        profile_cover_zoom: row.profile_cover_zoom,
+        profile_cover_x: row.profile_cover_x,
+        profile_cover_y: row.profile_cover_y,
+        page_background: row.page_background,
       }
     },
     async getStudent(id: string): Promise<Profile | null> {
@@ -1329,10 +1342,11 @@ export const supabaseBackend: Backend = {
         .filter((id): id is string => Boolean(id))
       if (submissionIds.length) {
         const counts = new Map<string, number>()
+        const pendingAppeals = new Set<string>()
         // Режем длинный список id на части, чтобы не упереться в лимит длины URL.
         for (let index = 0; index < submissionIds.length; index += 100) {
           const chunk = submissionIds.slice(index, index + 100)
-          const [versionsResult, annotationsResult] = await Promise.all([
+          const [versionsResult, annotationsResult, appealsResult] = await Promise.all([
             db
               .from('submission_versions')
               .select('submission_id, created_at')
@@ -1341,9 +1355,18 @@ export const supabaseBackend: Backend = {
               .from('annotations')
               .select('submission_id, created_at')
               .in('submission_id', chunk),
+            db
+              .from('grade_appeals')
+              .select('submission_id')
+              .eq('status', 'pending')
+              .in('submission_id', chunk),
           ])
           if (versionsResult.error) throw new Error(versionsResult.error.message)
           if (annotationsResult.error) throw new Error(annotationsResult.error.message)
+          if (appealsResult.error) throw new Error(appealsResult.error.message)
+          for (const appeal of (appealsResult.data ?? []) as { submission_id: string }[]) {
+            pendingAppeals.add(appeal.submission_id)
+          }
 
           const latestVersion = new Map<string, number>()
           for (const version of (versionsResult.data ?? []) as {
@@ -1375,6 +1398,9 @@ export const supabaseBackend: Backend = {
             entry.grade == null && entry.submission_id
               ? counts.get(entry.submission_id) ?? 0
               : 0,
+          appeal_pending: Boolean(
+            entry.submission_id && pendingAppeals.has(entry.submission_id),
+          ),
         }))
       }
     }
@@ -2246,6 +2272,63 @@ export const supabaseBackend: Backend = {
       await requireAdmin()
       const { error } = await client().from('annotations').delete().eq('id', id)
       if (error) throw new Error(error.message)
+    },
+  },
+
+  gradeAppeals: {
+    async list(submissionId: string): Promise<GradeAppeal[]> {
+      await requireProfile()
+      const { data, error } = await client()
+        .from('grade_appeals')
+        .select('*')
+        .eq('submission_id', submissionId)
+        .order('created_at', { ascending: false })
+      if (error) throw new Error(error.message)
+      return (data ?? []) as GradeAppeal[]
+    },
+    async create(submissionId: string, message: string) {
+      const student = await requireStudent()
+      const trimmed = message.trim()
+      if (trimmed.length < 5) throw new Error('Опишите причину апелляции подробнее')
+      if (trimmed.length > 1000) throw new Error('Сообщение должно быть не длиннее 1000 символов')
+      const { data, error } = await client()
+        .from('grade_appeals')
+        .insert({
+          submission_id: submissionId,
+          student_id: student.id,
+          message: trimmed,
+        })
+        .select('*')
+        .single()
+      if (error) throw new Error(error.message)
+      return data as GradeAppeal
+    },
+    async cancel(id: string) {
+      const student = await requireStudent()
+      const { error } = await client()
+        .from('grade_appeals')
+        .update({ status: 'cancelled', resolved_at: new Date().toISOString() })
+        .eq('id', id)
+        .eq('student_id', student.id)
+        .eq('status', 'pending')
+      if (error) throw new Error(error.message)
+    },
+    async resolve(id: string, status: 'accepted' | 'rejected', comment: string | null) {
+      const admin = await requireAdmin()
+      const { data, error } = await client()
+        .from('grade_appeals')
+        .update({
+          status,
+          teacher_comment: comment?.trim() || null,
+          resolved_by: admin.id,
+          resolved_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .eq('status', 'pending')
+        .select('*')
+        .single()
+      if (error) throw new Error(error.message)
+      return data as GradeAppeal
     },
   },
 

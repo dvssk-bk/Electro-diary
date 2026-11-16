@@ -229,6 +229,47 @@ export function normalizeCover(value: string | null | undefined): CardPattern | 
   return findGradient(value)?.value ?? null
 }
 
+/** Масштаб своей обложки: 100–250 %. Некорректное значение → `null`. */
+export function normalizeCoverZoom(value: number | null | undefined): number | null {
+  if (value === null || value === undefined || !Number.isFinite(value)) return null
+  return Math.min(250, Math.max(100, Math.round(value)))
+}
+
+/** Сдвиг своей обложки: −50…50 %. Некорректное значение → `null`. */
+export function normalizeCoverOffset(value: number | null | undefined): number | null {
+  if (value === null || value === undefined || !Number.isFinite(value)) return null
+  return Math.min(50, Math.max(-50, Math.round(value)))
+}
+
+export function validateCoverTransform(
+  zoom: number | null | undefined,
+  x: number | null | undefined,
+  y: number | null | undefined,
+): string | null {
+  for (const value of [zoom, x, y]) {
+    if (value !== null && value !== undefined && !Number.isFinite(value)) {
+      return 'Положение обложки задано некорректно'
+    }
+  }
+  if (zoom != null && (zoom < 100 || zoom > 250)) return 'Масштаб обложки должен быть от 100 до 250 %'
+  for (const value of [x, y]) {
+    if (value != null && (value < -50 || value > 50)) return 'Сдвиг обложки должен быть от −50 до 50 %'
+  }
+  return null
+}
+
+/** Нормализует фон страницы; пустое или устаревшее значение → `null`. */
+export function normalizePageBackground(value: string | null | undefined): CardPattern | null {
+  return findGradient(value)?.value ?? null
+}
+
+export function validatePageBackground(value: string | null | undefined): string | null {
+  const trimmed = value?.trim() ?? ''
+  if (!trimmed) return null
+  if (!normalizePageBackground(trimmed)) return 'Фон страницы задан некорректно'
+  return null
+}
+
 export function validateCover(value: string | null | undefined): string | null {
   const trimmed = value?.trim() ?? ''
   if (!trimmed) return null
@@ -250,19 +291,43 @@ export function patternStyle(pattern: string | null | undefined): CSSProperties 
 }
 
 /**
- * CSS-переменная обложки профиля: своя картинка важнее градиента.
- * Путь экранируем, чтобы кавычки в URL не ломали CSS.
+ * CSS-переменные обложки профиля: своя картинка важнее градиента.
+ * Путь экранируем, чтобы кавычки в URL не ломали CSS. Для своей картинки
+ * дополнительно передаём масштаб и сдвиг (в процентах).
  */
 export function coverStyle(
   cover: string | null | undefined,
   imageUrl?: string | null,
+  zoom?: number | null,
+  offsetX?: number | null,
+  offsetY?: number | null,
 ): CSSProperties | undefined {
   if (imageUrl) {
     const safe = imageUrl.replace(/["\\]/g, '\\$&')
-    return { '--profile-cover': `url("${safe}")` } as CSSProperties
+    return {
+      '--profile-cover': `url("${safe}")`,
+      '--cover-zoom': (normalizeCoverZoom(zoom) ?? 100) / 100,
+      '--cover-x': `${normalizeCoverOffset(offsetX) ?? 0}%`,
+      '--cover-y': `${normalizeCoverOffset(offsetY) ?? 0}%`,
+    } as CSSProperties
   }
   const gradient = findGradient(cover)
   return gradient ? ({ '--profile-cover': gradient.css } as CSSProperties) : undefined
+}
+
+/**
+ * Фон всей страницы. Вместе с градиентом выставляем контраст заголовков,
+ * которые лежат прямо на фоне, а не на белой карточке.
+ */
+export function pageBackgroundStyle(background: string | null | undefined): CSSProperties | undefined {
+  const gradient = findGradient(background)
+  if (!gradient) return undefined
+  const darkBackground = averageLuminance(gradient.css) < 0.5
+  return {
+    '--app-bg': gradient.css,
+    '--page-text': darkBackground ? '#ffffff' : '#14253d',
+    '--page-text-soft': darkBackground ? '#dce7f2' : '#4f6072',
+  } as CSSProperties
 }
 
 /** Общий стиль карточки: акцентная полоса и градиентный фон. */
@@ -338,6 +403,14 @@ export function normalizeProfile(input: ProfileInput): ProfileInput {
   if (input.avatar_emoji !== undefined) value.avatar_emoji = normalizeEmoji(input.avatar_emoji)
   if (input.card_pattern !== undefined) value.card_pattern = normalizePattern(input.card_pattern)
   if (input.profile_cover !== undefined) value.profile_cover = normalizeCover(input.profile_cover)
+  if (input.profile_cover_zoom !== undefined)
+    value.profile_cover_zoom = normalizeCoverZoom(input.profile_cover_zoom)
+  if (input.profile_cover_x !== undefined)
+    value.profile_cover_x = normalizeCoverOffset(input.profile_cover_x)
+  if (input.profile_cover_y !== undefined)
+    value.profile_cover_y = normalizeCoverOffset(input.profile_cover_y)
+  if (input.page_background !== undefined)
+    value.page_background = normalizePageBackground(input.page_background)
   return value
 }
 
@@ -395,6 +468,24 @@ export function validateProfile(input: ProfileInput): string | null {
   if (value.profile_cover !== undefined) {
     const coverError = validateCover(value.profile_cover)
     if (coverError) return coverError
+  }
+
+  if (
+    value.profile_cover_zoom !== undefined ||
+    value.profile_cover_x !== undefined ||
+    value.profile_cover_y !== undefined
+  ) {
+    const transformError = validateCoverTransform(
+      value.profile_cover_zoom,
+      value.profile_cover_x,
+      value.profile_cover_y,
+    )
+    if (transformError) return transformError
+  }
+
+  if (value.page_background !== undefined) {
+    const pageError = validatePageBackground(value.page_background)
+    if (pageError) return pageError
   }
 
   return null

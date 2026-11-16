@@ -27,6 +27,14 @@ export interface Profile {
   profile_cover?: string | null
   /** Своя картинка обложки; показывается вместо градиента, если загружена. */
   profile_cover_url?: string | null
+  /** Масштаб своей обложки в процентах (100 — без увеличения). */
+  profile_cover_zoom?: number | null
+  /** Сдвиг своей обложки по горизонтали, проценты от размера картинки. */
+  profile_cover_x?: number | null
+  /** Сдвиг своей обложки по вертикали, проценты от размера картинки. */
+  profile_cover_y?: number | null
+  /** Градиентный фон всей страницы; значения из общего каталога градиентов. */
+  page_background?: string | null
 }
 
 /**
@@ -44,6 +52,10 @@ export interface ProfileInput {
   avatar_emoji?: string | null
   card_pattern?: string | null
   profile_cover?: string | null
+  profile_cover_zoom?: number | null
+  profile_cover_x?: number | null
+  profile_cover_y?: number | null
+  page_background?: string | null
 }
 
 export interface TestDataResult {
@@ -172,6 +184,22 @@ export interface Annotation {
   created_at: string
 }
 
+export type GradeAppealStatus = 'pending' | 'accepted' | 'rejected' | 'cancelled'
+
+/** Просьба студента пересмотреть выставленную оценку. */
+export interface GradeAppeal {
+  id: string
+  submission_id: string
+  student_id: string
+  message: string
+  status: GradeAppealStatus
+  /** Комментарий преподавателя при решении. */
+  teacher_comment: string | null
+  resolved_by: string | null
+  created_at: string
+  resolved_at: string | null
+}
+
 export interface JournalEntry {
   submission_id: string | null
   assignment_id: string
@@ -181,6 +209,8 @@ export interface JournalEntry {
   submitted_at: string | null
   /** Активные замечания: оставленные после последней загруженной версии. */
   annotation_count: number
+  /** Есть ли по работе апелляция на рассмотрении. */
+  appeal_pending?: boolean
 }
 
 export interface JournalData {

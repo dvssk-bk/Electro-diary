@@ -60,7 +60,13 @@ export function StudentPublicProfilePage() {
         : '/journal'
   const isSelf = Boolean(profile && student && profile.id === student.id)
   const parts = splitName(student?.full_name ?? '')
-  const cover = coverStyle(student?.profile_cover, student?.profile_cover_url)
+  const cover = coverStyle(
+    student?.profile_cover,
+    student?.profile_cover_url,
+    student?.profile_cover_zoom,
+    student?.profile_cover_x,
+    student?.profile_cover_y,
+  )
 
   return (
     <AppShell role={profile?.role ?? 'student'}>
@@ -84,7 +90,11 @@ export function StudentPublicProfilePage() {
       ) : (
         <div className="profile-layout" style={profileCardStyle(student.accent_color, student.card_pattern)}>
           <aside className={`profile-card${cover ? ' profile-card--cover' : ''}`}>
-            {cover ? <div className="profile-cover" style={cover} aria-hidden="true" /> : null}
+            {cover ? (
+              <div className="profile-cover" style={cover} aria-hidden="true">
+                <span className="profile-cover__image" />
+              </div>
+            ) : null}
             <Avatar profile={student} size="xl" />
             <h2>{student.full_name}</h2>
             <span className="badge badge--blue">

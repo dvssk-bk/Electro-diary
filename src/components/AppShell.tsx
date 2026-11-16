@@ -16,6 +16,7 @@ import { useAuth } from '../context/AuthContext'
 import { useDisciplines } from '../context/DisciplineContext'
 import { backend, isDemoMode } from '../lib/api'
 import { formatSize } from '../lib/format'
+import { pageBackgroundStyle } from '../lib/profile'
 import { Avatar } from './Avatar'
 
 interface AppShellProps {
@@ -64,7 +65,7 @@ export function AppShell({ role, children }: AppShellProps) {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" style={pageBackgroundStyle(profile?.page_background)}>
       <header className="topbar">
         <div className="topbar__inner">
           <button type="button" className="brand" onClick={() => navigate(home)}>

@@ -181,7 +181,13 @@ export function TeacherProfilePage({ self = false }: { self?: boolean }) {
   }
 
   const backTo = profile?.role === 'admin' ? '/admin/journal' : '/journal'
-  const cover = coverStyle(teacher?.profile_cover, teacher?.profile_cover_url)
+  const cover = coverStyle(
+    teacher?.profile_cover,
+    teacher?.profile_cover_url,
+    teacher?.profile_cover_zoom,
+    teacher?.profile_cover_x,
+    teacher?.profile_cover_y,
+  )
 
   return (
     <AppShell role={profile?.role ?? 'student'}>
@@ -211,7 +217,11 @@ export function TeacherProfilePage({ self = false }: { self?: boolean }) {
       ) : (
         <div className="profile-layout" style={profileCardStyle(teacher.accent_color, teacher.card_pattern)}>
           <aside className={`profile-card${cover ? ' profile-card--cover' : ''}`}>
-            {cover ? <div className="profile-cover" style={cover} aria-hidden="true" /> : null}
+            {cover ? (
+              <div className="profile-cover" style={cover} aria-hidden="true">
+                <span className="profile-cover__image" />
+              </div>
+            ) : null}
             <Avatar profile={teacher} size="xl" />
             <h2>{teacher.full_name}</h2>
             <span className="badge badge--blue">

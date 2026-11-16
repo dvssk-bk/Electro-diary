@@ -5,6 +5,7 @@ import type {
   Discipline,
   ExtraAssignment,
   ExtraSubmission,
+  GradeAppeal,
   Group,
   GroupViewer,
   Profile,
@@ -12,7 +13,7 @@ import type {
   SubmissionVersion,
 } from '../types'
 const DB_KEY = 'diary_demo_v5'
-const DB_VERSION = 6 as const
+const DB_VERSION = 7 as const
 
 export interface DemoUser {
   login: string
@@ -31,6 +32,7 @@ export interface DemoDb {
   submissions: Submission[]
   versions: SubmissionVersion[]
   annotations: Annotation[]
+  gradeAppeals: GradeAppeal[]
   extraAssignments: ExtraAssignment[]
   extraSubmissions: ExtraSubmission[]
   groupViewers: GroupViewer[]
@@ -62,6 +64,7 @@ export function createSeedDb(): DemoDb {
     submissions: [],
     versions: [],
     annotations: [],
+    gradeAppeals: [],
     extraAssignments: [],
     extraSubmissions: [],
     groupViewers: [],
@@ -79,10 +82,31 @@ export function loadDb(): DemoDb {
     const raw = localStorage.getItem(DB_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as DemoDb
+      if (parsed && parsed.version > 5 && parsed.version < DB_VERSION) {
+        // Версия 7: апелляции на оценку, фон страницы и положение обложки.
+        // Старые профили получают пустые поля, данные не трогаем.
+        parsed.version = DB_VERSION
+        parsed.gradeAppeals ??= []
+        parsed.extraAssignments ??= []
+        parsed.extraSubmissions ??= []
+        parsed.assignmentAttachments ??= []
+        parsed.groupViewers ??= []
+        for (const user of parsed.users) {
+          user.profile.profile_cover_url ??= null
+          user.profile.profile_cover_zoom ??= null
+          user.profile.profile_cover_x ??= null
+          user.profile.profile_cover_y ??= null
+          user.profile.page_background ??= null
+        }
+        cache = parsed
+        saveDb()
+        return cache
+      }
       if (parsed && parsed.version === 5) {
         // Версия 6: рамка аватара и день рождения. Старые профили
         // просто получают пустые поля, данные не трогаем.
-        parsed.version = 6
+        parsed.version = DB_VERSION
+        parsed.gradeAppeals ??= []
         parsed.extraAssignments ??= []
         parsed.extraSubmissions ??= []
         parsed.assignmentAttachments ??= []
@@ -95,14 +119,19 @@ export function loadDb(): DemoDb {
           user.profile.card_pattern ??= null
           user.profile.profile_cover ??= null
           user.profile.profile_cover_url ??= null
+          user.profile.profile_cover_zoom ??= null
+          user.profile.profile_cover_x ??= null
+          user.profile.profile_cover_y ??= null
+          user.profile.page_background ??= null
         }
         cache = parsed
         saveDb()
         return cache
       }
       if (parsed && parsed.version === DB_VERSION) {
-        // Старые демо-базы не знают про доп. задания — добавляем пустые списки
-        // без сброса уже созданных дисциплин и работ.
+        // Старые демо-базы не знают про новые разделы — добавляем пустые
+        // списки без сброса уже созданных дисциплин и работ.
+        parsed.gradeAppeals ??= []
         parsed.extraAssignments ??= []
         parsed.extraSubmissions ??= []
         parsed.assignmentAttachments ??= []
@@ -110,6 +139,10 @@ export function loadDb(): DemoDb {
         for (const user of parsed.users) {
           user.profile.profile_cover ??= null
           user.profile.profile_cover_url ??= null
+          user.profile.profile_cover_zoom ??= null
+          user.profile.profile_cover_x ??= null
+          user.profile.profile_cover_y ??= null
+          user.profile.page_background ??= null
         }
         cache = parsed
         return cache
@@ -169,6 +202,10 @@ export function coerceProfile(value: Profile): Profile {
     card_pattern: value.card_pattern ?? null,
     profile_cover: value.profile_cover ?? null,
     profile_cover_url: value.profile_cover_url ?? null,
+    profile_cover_zoom: value.profile_cover_zoom ?? null,
+    profile_cover_x: value.profile_cover_x ?? null,
+    profile_cover_y: value.profile_cover_y ?? null,
+    page_background: value.page_background ?? null,
   }
 }
 

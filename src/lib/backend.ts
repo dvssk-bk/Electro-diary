@@ -7,6 +7,7 @@ import type {
   ExtraLeaderboardEntry,
   ExtraSubmission,
   ExtraWorkRow,
+  GradeAppeal,
   Group,
   JournalData,
   NewAssignment,
@@ -121,6 +122,20 @@ export interface Backend {
     list: (submissionId: string) => Promise<Annotation[]>
     create: (input: AnnotationInput) => Promise<Annotation>
     remove: (id: string) => Promise<void>
+  }
+  gradeAppeals: {
+    /** Апелляции по работе: студент видит свои, преподаватель — все. */
+    list: (submissionId: string) => Promise<GradeAppeal[]>
+    /** Студент просит пересмотреть оценку. */
+    create: (submissionId: string, message: string) => Promise<GradeAppeal>
+    /** Студент отзывает апелляцию, пока её не рассмотрели. */
+    cancel: (id: string) => Promise<void>
+    /** Преподаватель принимает или отклоняет апелляцию. */
+    resolve: (
+      id: string,
+      status: 'accepted' | 'rejected',
+      comment: string | null,
+    ) => Promise<GradeAppeal>
   }
   extra: {
     list: () => Promise<ExtraAssignment[]>

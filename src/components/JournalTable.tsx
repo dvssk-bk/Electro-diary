@@ -335,6 +335,8 @@ export function JournalTable({
                             ? `Дедлайн прошёл: ${formatDateTime(assignment.due_at)}`
                             : hasRemarks
                               ? `Замечаний: ${entry?.annotation_count ?? 0} — нужно исправить`
+                              : entry?.appeal_pending
+                                ? 'Апелляция на рассмотрении'
                               : isAdmin
                                 ? 'Изменить отметку'
                                 : canSubmit
@@ -360,11 +362,21 @@ export function JournalTable({
                               </span>
                             </span>
                           ) : entry.grade != null ? (
-                            <GradeBadge
-                              grade={entry.grade}
-                              type={assignment.grade_type}
-                              variant="cell"
-                            />
+                            <span className="journal-cell__grade">
+                              <GradeBadge
+                                grade={entry.grade}
+                                type={assignment.grade_type}
+                                variant="cell"
+                              />
+                              {entry.appeal_pending ? (
+                                <span
+                                  className="appeal-dot"
+                                  title="Апелляция на рассмотрении"
+                                  aria-label="Апелляция на рассмотрении"
+                                  data-testid={`appeal-dot-${assignment.id}-${student.id}`}
+                                />
+                              ) : null}
+                            </span>
                           ) : (
                             <span className="mark-plus">+</span>
                           )
@@ -524,11 +536,20 @@ export function JournalTable({
                                   hasRemarks ? (
                                     <span className="revise-cell">Исправить</span>
                                   ) : entry.grade != null ? (
-                                    <GradeBadge
-                                      grade={entry.grade}
-                                      type={assignment.grade_type}
-                                      variant="cell"
-                                    />
+                                    <span className="journal-cell__grade">
+                                      <GradeBadge
+                                        grade={entry.grade}
+                                        type={assignment.grade_type}
+                                        variant="cell"
+                                      />
+                                      {entry.appeal_pending ? (
+                                        <span
+                                          className="appeal-dot"
+                                          title="Апелляция на рассмотрении"
+                                          aria-label="Апелляция на рассмотрении"
+                                        />
+                                      ) : null}
+                                    </span>
                                   ) : (
                                     <span className="mark-plus">+</span>
                                   )

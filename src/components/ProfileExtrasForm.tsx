@@ -15,6 +15,7 @@ import {
   normalizeCover,
   normalizeEmoji,
   normalizeFrame,
+  normalizePageBackground,
   normalizePattern,
   patternStyle,
   validateAccent,
@@ -22,6 +23,7 @@ import {
   validateCover,
   validateEmoji,
   validateFrame,
+  validatePageBackground,
   validatePattern,
 } from '../lib/profile'
 import type { Profile } from '../lib/types'
@@ -60,12 +62,41 @@ const GRADIENT_PRESETS = PROFILE_GRADIENTS.map((item) => ({
 }))
 const PATTERN_PRESETS = [{ value: '', label: 'Без фона' }, ...GRADIENT_PRESETS]
 const COVER_PRESETS = [{ value: '', label: 'Без обложки' }, ...GRADIENT_PRESETS]
+const PAGE_PRESETS = [{ value: '', label: 'Без фона' }, ...GRADIENT_PRESETS]
 
-/** Эмодзи для аватара, когда фото не загружено. */
-const EMOJI_PRESETS = [
-  '🦊', '🐼', '🐸', '🐱', '🐶', '🦉', '🐨', '🦁',
-  '🐧', '🐢', '🌸', '⭐', '🚀', '🎓', '🎧', '⚽',
-]
+/** Эмодзи-аватары, разложенные по темам: вкладки не дают списку разрастись. */
+const EMOJI_THEMES = [
+  {
+    id: 'animals',
+    label: 'Животные',
+    emojis: ['🦊', '🐼', '🐸', '🐱', '🐶', '🦉', '🐨', '🦁', '🐧', '🐢', '🐹', '🐰'],
+  },
+  {
+    id: 'study',
+    label: 'Учёба',
+    emojis: ['🎓', '📚', '✏️', '🔬', '💡', '🧪', '🧮', '🎒'],
+  },
+  {
+    id: 'tech',
+    label: 'Техника',
+    emojis: ['🚀', '💻', '🎧', '🎮', '🛸', '📱', '🤖', '🕹️'],
+  },
+  {
+    id: 'sport',
+    label: 'Спорт',
+    emojis: ['⚽', '🏀', '🎾', '🏆', '🏃', '🚴', '🏐', '🥇'],
+  },
+  {
+    id: 'food',
+    label: 'Еда',
+    emojis: ['🍕', '🍩', '🍎', '🍉', '🍦', '☕', '🍿', '🥑'],
+  },
+  {
+    id: 'style',
+    label: 'Стиль',
+    emojis: ['🌸', '⭐', '🌈', '🌙', '🔥', '❄️', '🌻', '🍀'],
+  },
+] as const
 
 function splitFrame(value: string | null | undefined): {
   color1: string
@@ -152,13 +183,31 @@ export function ProfileExtrasForm({
   const [coverSaving, setCoverSaving] = useState(false)
   const [coverUploading, setCoverUploading] = useState(false)
   const [coverError, setCoverError] = useState('')
+  const [coverZoom, setCoverZoom] = useState(profile.profile_cover_zoom ?? 100)
+  const [coverX, setCoverX] = useState(profile.profile_cover_x ?? 0)
+  const [coverY, setCoverY] = useState(profile.profile_cover_y ?? 0)
+  const [coverPositionSaving, setCoverPositionSaving] = useState(false)
   const coverInputRef = useRef<HTMLInputElement | null>(null)
+
+  const [pageBackground, setPageBackground] = useState(
+    normalizePageBackground(profile.page_background) ?? '',
+  )
+  const [pageSaving, setPageSaving] = useState(false)
+  const [pageError, setPageError] = useState('')
 
   const [pattern, setPattern] = useState(normalizePattern(profile.card_pattern) ?? '')
   const [patternSaving, setPatternSaving] = useState(false)
   const [patternError, setPatternError] = useState('')
 
   const [avatarEmoji, setAvatarEmoji] = useState(normalizeEmoji(profile.avatar_emoji) ?? '')
+  const [emojiTheme, setEmojiTheme] = useState<string>(() => {
+    const current = normalizeEmoji(profile.avatar_emoji)
+    return (
+      EMOJI_THEMES.find(
+        (theme) => current && (theme.emojis as readonly string[]).includes(current),
+      )?.id ?? EMOJI_THEMES[0].id
+    )
+  })
   const [emojiSaving, setEmojiSaving] = useState(false)
   const [emojiError, setEmojiError] = useState('')
 
@@ -224,6 +273,25 @@ export function ProfileExtrasForm({
     }
   }
 
+  const saveCoverPosition = async () => {
+    setCoverError('')
+    setCoverPositionSaving(true)
+    try {
+      const updated = await backend.profiles.updateMine({
+        profile_cover_zoom: coverZoom,
+        profile_cover_x: coverX,
+        profile_cover_y: coverY,
+      })
+      await refreshProfile()
+      onSaved?.(updated)
+      toast.success('Положение обложки сохранено')
+    } catch (err) {
+      setCoverError((err as Error).message)
+    } finally {
+      setCoverPositionSaving(false)
+    }
+  }
+
   const chooseCoverFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     event.target.value = ''
@@ -281,6 +349,28 @@ export function ProfileExtrasForm({
       setPatternError((err as Error).message)
     } finally {
       setPatternSaving(false)
+    }
+  }
+
+  const savePageBackground = async (event: FormEvent) => {
+    event.preventDefault()
+    setPageError('')
+    const value = pageBackground || null
+    const message = validatePageBackground(value)
+    if (message) {
+      setPageError(message)
+      return
+    }
+    setPageSaving(true)
+    try {
+      const updated = await backend.profiles.updateMine({ page_background: value })
+      await refreshProfile()
+      onSaved?.(updated)
+      toast.success(value ? 'Фон страницы сохранён' : 'Фон страницы убран')
+    } catch (err) {
+      setPageError((err as Error).message)
+    } finally {
+      setPageSaving(false)
     }
   }
 
@@ -360,6 +450,7 @@ export function ProfileExtrasForm({
   const dayOptions = month
     ? Array.from({ length: daysInMonth(Number(month)) }, (_, index) => index + 1)
     : []
+  const activeEmojiTheme = EMOJI_THEMES.find((theme) => theme.id === emojiTheme) ?? EMOJI_THEMES[0]
 
   return (
     <>
@@ -454,6 +545,89 @@ export function ProfileExtrasForm({
             </button>
           ) : null}
         </div>
+
+        {profile.profile_cover_url ? (
+          <div className="cover-position">
+            <div
+              className="cover-position__strip"
+              style={coverStyle(cover, profile.profile_cover_url, coverZoom, coverX, coverY)}
+              aria-hidden="true"
+            >
+              <span className="profile-cover__image" />
+            </div>
+            <div className="cover-position__controls">
+              <label className="cover-range">
+                <span>Масштаб · {coverZoom}%</span>
+                <input
+                  type="range"
+                  min={100}
+                  max={250}
+                  step={5}
+                  value={coverZoom}
+                  onChange={(event) => setCoverZoom(Number(event.target.value))}
+                  data-testid="cover-zoom"
+                />
+              </label>
+              <label className="cover-range">
+                <span>Сдвиг по горизонтали · {coverX}%</span>
+                <input
+                  type="range"
+                  min={-50}
+                  max={50}
+                  step={1}
+                  value={coverX}
+                  onChange={(event) => setCoverX(Number(event.target.value))}
+                  data-testid="cover-offset-x"
+                />
+              </label>
+              <label className="cover-range">
+                <span>Сдвиг по вертикали · {coverY}%</span>
+                <input
+                  type="range"
+                  min={-50}
+                  max={50}
+                  step={1}
+                  value={coverY}
+                  onChange={(event) => setCoverY(Number(event.target.value))}
+                  data-testid="cover-offset-y"
+                />
+              </label>
+            </div>
+            <div className="cover-hint">
+              <span className="muted">
+                Настройте кадр: так обложка будет выглядеть в профиле.
+              </span>
+              <div className="cover-hint__actions">
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm"
+                  onClick={() => {
+                    setCoverZoom(100)
+                    setCoverX(0)
+                    setCoverY(0)
+                  }}
+                  disabled={coverPositionSaving}
+                >
+                  Сбросить кадр
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--primary btn--sm"
+                  onClick={saveCoverPosition}
+                  disabled={coverPositionSaving}
+                  data-testid="save-cover-position"
+                >
+                  {coverPositionSaving ? (
+                    <Loader2 className="spin" size={15} />
+                  ) : (
+                    <Save size={15} />
+                  )}
+                  Сохранить кадр
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {coverError ? <ErrorBox>{coverError}</ErrorBox> : null}
 
@@ -615,6 +789,49 @@ export function ProfileExtrasForm({
         </div>
       </form>
 
+      <form className="profile-form" onSubmit={savePageBackground} hidden={!showAppearance}>
+        <div>
+          <span className="eyebrow">Оформление</span>
+          <h2>Фон страницы</h2>
+          <p className="muted">
+            Градиент на фоне всего дневника — виден на журнале, заданиях и в профиле. Карточки
+            и текст остаются читаемыми: заголовки подстраивают контраст под фон.
+          </p>
+        </div>
+
+        <div className="pattern-grid" role="group" aria-label="Фон всей страницы">
+          {PAGE_PRESETS.map((preset) => (
+            <button
+              key={preset.value || 'none'}
+              type="button"
+              className="pattern-choice"
+              aria-pressed={pageBackground === preset.value}
+              onClick={() => setPageBackground(preset.value)}
+            >
+              <span
+                className="pattern-choice__preview pattern-choice__preview--page"
+                aria-hidden="true"
+                style={
+                  preset.value
+                    ? patternStyle(preset.value)
+                    : { backgroundImage: 'none', color: '#14253d' }
+                }
+              />
+              <span>{preset.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {pageError ? <ErrorBox>{pageError}</ErrorBox> : null}
+
+        <div className="profile-form__actions">
+          <button type="submit" className="btn btn--primary" disabled={pageSaving}>
+            {pageSaving ? <Loader2 className="spin" size={16} /> : <Save size={16} />}
+            Сохранить фон страницы
+          </button>
+        </div>
+      </form>
+
       <form className="profile-form" onSubmit={saveEmoji} hidden={!showAppearance}>
         <div>
           <span className="eyebrow">Оформление</span>
@@ -638,8 +855,22 @@ export function ProfileExtrasForm({
           </div>
 
           <div className="frame-editor__controls">
+            <div className="emoji-themes" role="tablist" aria-label="Темы эмодзи">
+              {EMOJI_THEMES.map((theme) => (
+                <button
+                  key={theme.id}
+                  type="button"
+                  role="tab"
+                  className="emoji-theme"
+                  aria-selected={emojiTheme === theme.id}
+                  onClick={() => setEmojiTheme(theme.id)}
+                >
+                  {theme.label}
+                </button>
+              ))}
+            </div>
             <div className="emoji-grid" role="group" aria-label="Эмодзи для аватара">
-              {EMOJI_PRESETS.map((emoji) => (
+              {activeEmojiTheme.emojis.map((emoji) => (
                 <button
                   key={emoji}
                   type="button"

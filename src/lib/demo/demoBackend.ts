@@ -7,6 +7,7 @@ import type {
   ExtraLeaderboardEntry,
   ExtraSubmission,
   ExtraWorkRow,
+  GradeAppeal,
   Group,
   JournalData,
   NewAssignment,
@@ -718,6 +719,12 @@ export const demoBackend: Backend = {
       if (value.avatar_emoji !== undefined) user.profile.avatar_emoji = value.avatar_emoji
       if (value.card_pattern !== undefined) user.profile.card_pattern = value.card_pattern
       if (value.profile_cover !== undefined) user.profile.profile_cover = value.profile_cover
+      if (value.profile_cover_zoom !== undefined)
+        user.profile.profile_cover_zoom = value.profile_cover_zoom
+      if (value.profile_cover_x !== undefined) user.profile.profile_cover_x = value.profile_cover_x
+      if (value.profile_cover_y !== undefined) user.profile.profile_cover_y = value.profile_cover_y
+      if (value.page_background !== undefined)
+        user.profile.page_background = value.page_background
       saveDb()
       emit()
       return { ...coerceProfile(user.profile), login: user.login }
@@ -840,6 +847,7 @@ export const demoBackend: Backend = {
       db.submissions = db.submissions.filter((s) => !submissionIds.has(s.id))
       db.versions = db.versions.filter((v) => !submissionIds.has(v.submission_id))
       db.annotations = db.annotations.filter((a) => !submissionIds.has(a.submission_id))
+      db.gradeAppeals = db.gradeAppeals.filter((a) => !submissionIds.has(a.submission_id))
       saveDb()
     },
   },
@@ -983,6 +991,7 @@ export const demoBackend: Backend = {
       db.submissions = db.submissions.filter((s) => s.assignment_id !== id)
       db.versions = db.versions.filter((v) => !submissionIds.has(v.submission_id))
       db.annotations = db.annotations.filter((a) => !submissionIds.has(a.submission_id))
+      db.gradeAppeals = db.gradeAppeals.filter((a) => !submissionIds.has(a.submission_id))
       db.assignments = db.assignments.filter((a) => a.id !== id)
       saveDb()
     },
@@ -1112,6 +1121,9 @@ export const demoBackend: Backend = {
       })
     const studentIds = new Set(students.map((s) => s.id))
     const assignmentIds = new Set(assignments.map((a) => a.id))
+    const pendingAppeals = new Set(
+      db.gradeAppeals.filter((appeal) => appeal.status === 'pending').map((a) => a.submission_id),
+    )
     const entries = db.submissions
       .filter((s) => studentIds.has(s.student_id) && assignmentIds.has(s.assignment_id))
       .map((s) => ({
@@ -1122,6 +1134,7 @@ export const demoBackend: Backend = {
         status: s.status,
         submitted_at: s.submitted_at,
         annotation_count: s.grade == null ? activeAnnotationCount(db, s.id) : 0,
+        appeal_pending: pendingAppeals.has(s.id),
       }))
     return {
       assignments: assignments.map((assignment) => ({
@@ -1323,6 +1336,7 @@ export const demoBackend: Backend = {
       db.submissions = db.submissions.filter((s) => s.id !== submissionId)
       db.versions = db.versions.filter((v) => v.submission_id !== submissionId)
       db.annotations = db.annotations.filter((a) => a.submission_id !== submissionId)
+      db.gradeAppeals = db.gradeAppeals.filter((a) => a.submission_id !== submissionId)
       saveDb()
     },
     async versions(submissionId: string) {
@@ -1455,6 +1469,87 @@ export const demoBackend: Backend = {
       }
       db.annotations = db.annotations.filter((item) => item.id !== id)
       saveDb()
+    },
+  },
+
+  gradeAppeals: {
+    async list(submissionId: string): Promise<GradeAppeal[]> {
+      const profile = requireSession()
+      const db = loadDb()
+      const submission = db.submissions.find((item) => item.id === submissionId)
+      if (!submission) return []
+      if (profile.role === 'admin') {
+        if (!canManageSubmission(db, profile, submission)) {
+          throw new Error('Нет доступа к этой работе')
+        }
+      } else if (submission.student_id !== profile.id) {
+        throw new Error('Нет доступа к апелляциям этой работы')
+      }
+      return db.gradeAppeals
+        .filter((item) => item.submission_id === submissionId)
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    },
+    async create(submissionId: string, message: string): Promise<GradeAppeal> {
+      const student = requireStudent()
+      const db = loadDb()
+      const submission = db.submissions.find((item) => item.id === submissionId)
+      if (!submission || submission.student_id !== student.id) {
+        throw new Error('Работа не найдена')
+      }
+      if (submission.grade == null) {
+        throw new Error('Апелляцию можно подать только после выставления оценки')
+      }
+      const trimmed = message.trim()
+      if (trimmed.length < 5) throw new Error('Опишите причину апелляции подробнее')
+      if (trimmed.length > 1000) throw new Error('Сообщение должно быть не длиннее 1000 символов')
+      if (
+        db.gradeAppeals.some(
+          (item) => item.submission_id === submissionId && item.status === 'pending',
+        )
+      ) {
+        throw new Error('Апелляция уже отправлена и ждёт ответа преподавателя')
+      }
+      const appeal: GradeAppeal = {
+        id: demoId(),
+        submission_id: submissionId,
+        student_id: student.id,
+        message: trimmed,
+        status: 'pending',
+        teacher_comment: null,
+        resolved_by: null,
+        created_at: new Date().toISOString(),
+        resolved_at: null,
+      }
+      db.gradeAppeals.push(appeal)
+      saveDb()
+      return appeal
+    },
+    async cancel(id: string): Promise<void> {
+      const student = requireStudent()
+      const db = loadDb()
+      const appeal = db.gradeAppeals.find((item) => item.id === id)
+      if (!appeal || appeal.student_id !== student.id) throw new Error('Апелляция не найдена')
+      if (appeal.status !== 'pending') throw new Error('Эту апелляцию уже рассмотрели')
+      appeal.status = 'cancelled'
+      appeal.resolved_at = new Date().toISOString()
+      saveDb()
+    },
+    async resolve(id, status, comment): Promise<GradeAppeal> {
+      const admin = requireAdmin()
+      const db = loadDb()
+      const appeal = db.gradeAppeals.find((item) => item.id === id)
+      if (!appeal) throw new Error('Апелляция не найдена')
+      const submission = db.submissions.find((item) => item.id === appeal.submission_id)
+      if (!submission || !canManageSubmission(db, admin, submission)) {
+        throw new Error('Нет доступа к этой работе')
+      }
+      if (appeal.status !== 'pending') throw new Error('Апелляцию уже рассмотрели')
+      appeal.status = status
+      appeal.teacher_comment = comment?.trim() || null
+      appeal.resolved_by = admin.id
+      appeal.resolved_at = new Date().toISOString()
+      saveDb()
+      return appeal
     },
   },
 

@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import {
   BookOpen,
   Check,
@@ -26,6 +26,7 @@ import type {
   Annotation,
   AnnotationRect,
   GradeType,
+  GradeAppeal,
   Submission,
   SubmissionVersion,
 } from '../lib/types'
@@ -162,6 +163,56 @@ function CommentComposer({
   )
 }
 
+const APPEAL_STATUS_LABELS: Record<GradeAppeal['status'], string> = {
+  pending: 'На рассмотрении',
+  accepted: 'Принята',
+  rejected: 'Отклонена',
+  cancelled: 'Отозвана',
+}
+
+function AppealResolveForm({
+  busy,
+  onResolve,
+}: {
+  busy: boolean
+  onResolve: (status: 'accepted' | 'rejected', comment: string | null) => void
+}) {
+  const [comment, setComment] = useState('')
+
+  return (
+    <div className="appeal-resolve">
+      <textarea
+        rows={2}
+        value={comment}
+        onChange={(event) => setComment(event.target.value)}
+        placeholder="Комментарий студенту (необязательно)"
+        maxLength={1000}
+        data-testid="appeal-teacher-comment"
+      />
+      <div className="appeal-resolve__actions">
+        <button
+          type="button"
+          className="btn btn--primary btn--sm"
+          disabled={busy}
+          onClick={() => onResolve('accepted', comment.trim() || null)}
+          data-testid="appeal-accept"
+        >
+          <Check size={15} /> Принять
+        </button>
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          disabled={busy}
+          onClick={() => onResolve('rejected', comment.trim() || null)}
+          data-testid="appeal-reject"
+        >
+          <X size={15} /> Отклонить
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function ReviewDrawer({
   open,
   submissionId,
@@ -173,6 +224,10 @@ export function ReviewDrawer({
   const toast = useToast()
   const [submission, setSubmission] = useState<Submission | null>(null)
   const [annotations, setAnnotations] = useState<Annotation[]>([])
+  const [appeals, setAppeals] = useState<GradeAppeal[]>([])
+  const [appealText, setAppealText] = useState('')
+  const [appealError, setAppealError] = useState('')
+  const [appealBusy, setAppealBusy] = useState(false)
   const [versions, setVersions] = useState<SubmissionVersion[]>([])
   const [blob, setBlob] = useState<Blob | null>(null)
   const [loading, setLoading] = useState(false)
@@ -224,18 +279,23 @@ export function ReviewDrawer({
     setTextValue('')
     setBlob(null)
     setFileError('')
+    setAppeals([])
+    setAppealText('')
+    setAppealError('')
 
     const load = async () => {
       try {
-        const [submissionValue, annotationValue, versionValue] = await Promise.all([
+        const [submissionValue, annotationValue, versionValue, appealValue] = await Promise.all([
           backend.submissions.get(submissionId),
           backend.annotations.list(submissionId),
           backend.submissions.versions(submissionId),
+          backend.gradeAppeals.list(submissionId),
         ])
         if (cancelled) return
         setSubmission(submissionValue)
         setAnnotations(annotationValue)
         setVersions(versionValue)
+        setAppeals(appealValue)
         setLoading(false)
         await loadBlob(submissionValue.file_path)
       } catch (err) {
@@ -268,6 +328,7 @@ export function ReviewDrawer({
   const gradeLockedByRemarks =
     mode === 'admin' && submission?.grade == null && activeAnnotations.length > 0
   const kind = submission ? fileKind(submission.original_name ?? '') : null
+  const pendingAppeal = appeals.find((appeal) => appeal.status === 'pending') ?? null
   const fileDeleted = Boolean(
     submission &&
       (submission.file_deleted_at ||
@@ -330,6 +391,64 @@ export function ReviewDrawer({
       onChanged?.()
     } catch (err) {
       toast.error((err as Error).message)
+    }
+  }
+
+  const submitAppeal = async (event?: FormEvent) => {
+    event?.preventDefault()
+    if (!submission || appealBusy) return
+    setAppealError('')
+    if (appealText.trim().length < 5) {
+      setAppealError('Опишите причину апелляции подробнее')
+      return
+    }
+    setAppealBusy(true)
+    try {
+      await backend.gradeAppeals.create(submission.id, appealText.trim())
+      setAppealText('')
+      setAppeals(await backend.gradeAppeals.list(submission.id))
+      toast.success('Апелляция отправлена преподавателю')
+      onChanged?.()
+    } catch (err) {
+      setAppealError((err as Error).message)
+    } finally {
+      setAppealBusy(false)
+    }
+  }
+
+  const cancelAppeal = async (appeal: GradeAppeal) => {
+    if (!submission || appealBusy) return
+    setAppealBusy(true)
+    setAppealError('')
+    try {
+      await backend.gradeAppeals.cancel(appeal.id)
+      setAppeals(await backend.gradeAppeals.list(submission.id))
+      toast.success('Апелляция отозвана')
+      onChanged?.()
+    } catch (err) {
+      setAppealError((err as Error).message)
+    } finally {
+      setAppealBusy(false)
+    }
+  }
+
+  const resolveAppeal = async (
+    appeal: GradeAppeal,
+    status: 'accepted' | 'rejected',
+    comment: string | null,
+  ) => {
+    if (!submission || appealBusy) return
+    setAppealBusy(true)
+    setAppealError('')
+    try {
+      await backend.gradeAppeals.resolve(appeal.id, status, comment)
+      setAppeals(await backend.gradeAppeals.list(submission.id))
+      toast.success(status === 'accepted' ? 'Апелляция принята' : 'Апелляция отклонена')
+      onChanged?.()
+    } catch (err) {
+      setAppealError((err as Error).message)
+    } finally {
+      setAppealBusy(false)
     }
   }
 
@@ -820,6 +939,96 @@ export function ReviewDrawer({
                   {removing ? <Loader2 className="spin" size={14} /> : <Trash2 size={14} />}
                   Снять отметку о сдаче
                 </button>
+              ) : null}
+            </div>
+
+            <div className="appeal-card" data-testid="appeal-card">
+              <div className="annotations-card__head">
+                <strong>
+                  <MessageSquareWarning size={16} /> Апелляция оценки
+                </strong>
+                {pendingAppeal ? <span className="badge">ждёт ответа</span> : null}
+              </div>
+
+              {mode === 'student' ? (
+                submission.grade == null ? (
+                  <p className="annotations-empty">
+                    Апелляцию можно подать после того, как преподаватель выставит оценку.
+                  </p>
+                ) : pendingAppeal ? (
+                  <div className="appeal-pending">
+                    <p>Апелляция отправлена. Преподаватель ещё не ответил.</p>
+                    <button
+                      type="button"
+                      className="text-btn text-btn--danger"
+                      onClick={() => cancelAppeal(pendingAppeal)}
+                      disabled={appealBusy}
+                    >
+                      {appealBusy ? <Loader2 className="spin" size={14} /> : <X size={14} />}
+                      Отозвать апелляцию
+                    </button>
+                  </div>
+                ) : (
+                  <form className="appeal-form" onSubmit={submitAppeal}>
+                    <p className="annotations-note">
+                      Если вы считаете оценку несправедливой, опишите причину — преподаватель
+                      пересмотрит работу и ответит здесь.
+                    </p>
+                    <textarea
+                      rows={3}
+                      value={appealText}
+                      onChange={(event) => setAppealText(event.target.value)}
+                      placeholder="Например: задание выполнено по всем критериям, прошу пересмотреть балл…"
+                      maxLength={1000}
+                      data-testid="appeal-message"
+                    />
+                    <div className="appeal-form__actions">
+                      <span className="muted">{appealText.length} / 1000</span>
+                      <button
+                        type="submit"
+                        className="btn btn--primary btn--sm"
+                        disabled={appealBusy}
+                        data-testid="appeal-submit"
+                      >
+                        {appealBusy ? <Loader2 className="spin" size={15} /> : <Save size={15} />}
+                        Отправить апелляцию
+                      </button>
+                    </div>
+                  </form>
+                )
+              ) : pendingAppeal ? (
+                <div className="appeal-pending">
+                  <p className="appeal-message">{pendingAppeal.message}</p>
+                  <AppealResolveForm
+                    busy={appealBusy}
+                    onResolve={(status, comment) => resolveAppeal(pendingAppeal, status, comment)}
+                  />
+                </div>
+              ) : (
+                <p className="annotations-empty">
+                  Апелляций на рассмотрении нет. Студент может подать её после выставления оценки.
+                </p>
+              )}
+
+              {appealError ? <p className="appeal-error">{appealError}</p> : null}
+
+              {appeals.length ? (
+                <ul className="appeal-list">
+                  {appeals.map((appeal) => (
+                    <li key={appeal.id} className={`appeal-item appeal-item--${appeal.status}`}>
+                      <div className="appeal-item__head">
+                        <span>{APPEAL_STATUS_LABELS[appeal.status]}</span>
+                        <span className="muted">{formatDateTime(appeal.created_at)}</span>
+                      </div>
+                      <p>{appeal.message}</p>
+                      {appeal.teacher_comment ? (
+                        <p className="appeal-item__answer">
+                          <strong>Ответ преподавателя:</strong> {appeal.teacher_comment}
+                        </p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
               ) : null}
             </div>
 
