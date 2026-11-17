@@ -19,6 +19,7 @@ import type {
   ProfileInput,
   StudentCredentials,
   Submission,
+  SubmissionSticker,
   SubmissionVersion,
   TeacherRegistration,
   TestDataResult,
@@ -1806,6 +1807,36 @@ export const supabaseBackend: Backend = {
       }
       const file = new File([text], submission.original_name as string, { type: 'text/plain' })
       return storeSubmission(profile, submission.assignment_id, file)
+    },
+    stickers: {
+      async list(submissionId: string) {
+        const { data, error } = await client()
+          .from('submission_stickers')
+          .select('*')
+          .eq('submission_id', submissionId)
+          .order('created_at', { ascending: true })
+        if (error) throw new Error(error.message)
+        return (data ?? []) as SubmissionSticker[]
+      },
+      async add(submissionId: string, emoji: string) {
+        const admin = await requireAdmin()
+        const { data, error } = await client()
+          .from('submission_stickers')
+          .insert({ submission_id: submissionId, teacher_id: admin.id, emoji })
+          .select('*')
+          .single()
+        if (error) throw new Error(error.message)
+        return data as SubmissionSticker
+      },
+      async remove(id: string) {
+        const admin = await requireAdmin()
+        const { error } = await client()
+          .from('submission_stickers')
+          .delete()
+          .eq('id', id)
+          .eq('teacher_id', admin.id)
+        if (error) throw new Error(error.message)
+      },
     },
     async cleanupReviewedFiles() {
       await requireAdmin()

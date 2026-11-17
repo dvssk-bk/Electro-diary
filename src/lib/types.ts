@@ -148,6 +148,14 @@ export interface Submission {
   updated_at: string
 }
 
+export interface SubmissionSticker {
+  id: string
+  submission_id: string
+  teacher_id: string
+  emoji: string
+  created_at: string
+}
+
 export interface SubmissionVersion {
   id: string
   submission_id: string

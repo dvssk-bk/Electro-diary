@@ -10,10 +10,11 @@ import type {
   GroupViewer,
   Profile,
   Submission,
+  SubmissionSticker,
   SubmissionVersion,
 } from '../types'
 const DB_KEY = 'diary_demo_v5'
-const DB_VERSION = 8 as const
+const DB_VERSION = 9 as const
 
 export interface DemoUser {
   login: string
@@ -30,6 +31,7 @@ export interface DemoDb {
   assignments: Assignment[]
   assignmentAttachments: AssignmentAttachment[]
   submissions: Submission[]
+  stickers: SubmissionSticker[]
   versions: SubmissionVersion[]
   annotations: Annotation[]
   gradeAppeals: GradeAppeal[]
@@ -62,6 +64,7 @@ export function createSeedDb(): DemoDb {
     assignments: [],
     assignmentAttachments: [],
     submissions: [],
+    stickers: [],
     versions: [],
     annotations: [],
     gradeAppeals: [],
@@ -83,14 +86,14 @@ export function loadDb(): DemoDb {
     if (raw) {
       const parsed = JSON.parse(raw) as DemoDb
       if (parsed && parsed.version > 5 && parsed.version < DB_VERSION) {
-        // Версия 8: текстовый ответ к заданию. Старые сдачи получают пустое
-        // поле, данные не трогаем. Заодно дозаполняем поля версий 6–7.
+        // Версия 9: стикеры-реакции на сдачу. Старые базы получают пустой список.
         parsed.version = DB_VERSION
         parsed.gradeAppeals ??= []
         parsed.extraAssignments ??= []
         parsed.extraSubmissions ??= []
         parsed.assignmentAttachments ??= []
         parsed.groupViewers ??= []
+        parsed.stickers ??= []
         for (const submission of parsed.submissions ?? []) {
           submission.answer_text ??= null
         }
@@ -106,14 +109,15 @@ export function loadDb(): DemoDb {
         return cache
       }
       if (parsed && parsed.version === 5) {
-        // Версия 8: рамка аватара, день рождения, апелляции, фон страницы,
-        // обложка и текстовый ответ. Данные не трогаем, только дозаполняем.
+        // Версия 9: рамка аватара, день рождения, апелляции, фон страницы,
+        // обложка, текстовый ответ и стикеры. Данные не трогаем, только дозаполняем.
         parsed.version = DB_VERSION
         parsed.gradeAppeals ??= []
         parsed.extraAssignments ??= []
         parsed.extraSubmissions ??= []
         parsed.assignmentAttachments ??= []
         parsed.groupViewers ??= []
+        parsed.stickers ??= []
         for (const submission of parsed.submissions ?? []) {
           submission.answer_text ??= null
         }
@@ -142,6 +146,7 @@ export function loadDb(): DemoDb {
         parsed.extraSubmissions ??= []
         parsed.assignmentAttachments ??= []
         parsed.groupViewers ??= []
+        parsed.stickers ??= []
         for (const submission of parsed.submissions ?? []) {
           submission.answer_text ??= null
         }

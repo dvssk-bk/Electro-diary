@@ -18,6 +18,7 @@ import type {
   ProfileInput,
   StudentCredentials,
   Submission,
+  SubmissionSticker,
   SubmissionVersion,
   TeacherRegistration,
   TestDataResult,
@@ -127,6 +128,12 @@ export interface Backend {
     remove: (submissionId: string) => Promise<void>
     versions: (submissionId: string) => Promise<SubmissionVersion[]>
     saveText: (submissionId: string, text: string) => Promise<Submission>
+    /** Эмодзи-реакции преподавателя на сдачу. */
+    stickers: {
+      list: (submissionId: string) => Promise<SubmissionSticker[]>
+      add: (submissionId: string, emoji: string) => Promise<SubmissionSticker>
+      remove: (id: string) => Promise<void>
+    }
     /** Удаляет файлы проверенных работ, оставшиеся в хранилище. */
     cleanupReviewedFiles: () => Promise<number>
   }

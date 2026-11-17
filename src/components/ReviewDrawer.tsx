@@ -31,10 +31,14 @@ import type {
   Submission,
   SubmissionVersion,
 } from '../lib/types'
+import type { SubmissionSticker } from '../lib/types'
 import { formatDateTime, formatSize } from '../lib/format'
 import { gradeLabel, gradeTypeLabel, normalizeGradeType, validateGrade } from '../lib/grades'
 import { fileKind } from '../lib/fileTypes'
 import { useToast } from '../context/ToastContext'
+import { useAuth } from '../context/AuthContext'
+
+const STICKER_OPTIONS = ['👍', '🔥', '📚', '🎯', '💡', '✅', '😄', '🤔'] as const
 
 export interface ReviewMeta {
   studentName?: string
@@ -223,6 +227,7 @@ export function ReviewDrawer({
   onChanged,
 }: ReviewDrawerProps) {
   const toast = useToast()
+  const { profile } = useAuth()
   const [submission, setSubmission] = useState<Submission | null>(null)
   const [annotations, setAnnotations] = useState<Annotation[]>([])
   const [appeals, setAppeals] = useState<GradeAppeal[]>([])
@@ -245,6 +250,7 @@ export function ReviewDrawer({
   const [editingText, setEditingText] = useState(false)
   const [textValue, setTextValue] = useState('')
   const [savingText, setSavingText] = useState(false)
+  const [stickers, setStickers] = useState<SubmissionSticker[]>([])
   const composerWrapRef = useRef<HTMLDivElement>(null)
 
   const loadAnnotations = useCallback(async (id: string) => {
@@ -283,20 +289,24 @@ export function ReviewDrawer({
     setAppeals([])
     setAppealText('')
     setAppealError('')
+    setStickers([])
 
     const load = async () => {
       try {
-        const [submissionValue, annotationValue, versionValue, appealValue] = await Promise.all([
-          backend.submissions.get(submissionId),
-          backend.annotations.list(submissionId),
-          backend.submissions.versions(submissionId),
-          backend.gradeAppeals.list(submissionId),
-        ])
+        const [submissionValue, annotationValue, versionValue, appealValue, stickerValue] =
+          await Promise.all([
+            backend.submissions.get(submissionId),
+            backend.annotations.list(submissionId),
+            backend.submissions.versions(submissionId),
+            backend.gradeAppeals.list(submissionId),
+            backend.submissions.stickers.list(submissionId),
+          ])
         if (cancelled) return
         setSubmission(submissionValue)
         setAnnotations(annotationValue)
         setVersions(versionValue)
         setAppeals(appealValue)
+        setStickers(stickerValue)
         setLoading(false)
         await loadBlob(submissionValue.file_path)
       } catch (err) {
@@ -338,6 +348,10 @@ export function ReviewDrawer({
   const hasStoredFiles = Boolean(
     submission && (submission.file_path || versions.some((version) => version.file_path)),
   )
+  const visibleStickers = stickers.filter((sticker) =>
+    mode === 'admin' ? sticker.teacher_id === profile?.id : true,
+  )
+  const activeSticker = mode === 'admin' ? visibleStickers[visibleStickers.length - 1]?.emoji ?? null : null
   const canMark =
     mode === 'admin' && !fileDeleted && kind && ['pdf', 'docx', 'txt'].includes(kind.preview)
 
@@ -596,6 +610,21 @@ export function ReviewDrawer({
     }
   }
 
+  const addSticker = async (emoji: string) => {
+    if (!submission) return
+    const created = await backend.submissions.stickers.add(submission.id, emoji)
+    setStickers((prev) => [...prev, created])
+  }
+
+  const removeSticker = async (sticker: SubmissionSticker) => {
+    try {
+      await backend.submissions.stickers.remove(sticker.id)
+      setStickers((prev) => prev.filter((item) => item.id !== sticker.id))
+    } catch (err) {
+      toast.error((err as Error).message)
+    }
+  }
+
   if (!open || !submissionId) return null
 
   const title = submission?.original_name || meta?.assignmentTitle || 'Работа студента'
@@ -676,6 +705,33 @@ export function ReviewDrawer({
                     : 'Выделите мышью фрагмент текста с ошибкой.'}{' '}
                   Комментарий появится в панели справа.
                 </span>
+              </div>
+            ) : null}
+
+            {mode === 'admin' && submission ? (
+              <div className="sticker-row" data-testid="sticker-row">
+                {STICKER_OPTIONS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    className={`sticker-btn ${activeSticker === emoji ? 'is-active' : ''}`}
+                    onClick={() => addSticker(emoji)}
+                    aria-label={`Поставить стикер ${emoji}`}
+                    data-testid={`sticker-${emoji}`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {submission && visibleStickers.length ? (
+              <div className="sticker-list" data-testid="sticker-list">
+                {visibleStickers.map((sticker) => (
+                  <span key={sticker.id} className="sticker-chip" data-testid="sticker-chip">
+                    {sticker.emoji}
+                  </span>
+                ))}
               </div>
             ) : null}
 

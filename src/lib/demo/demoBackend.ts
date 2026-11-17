@@ -1421,6 +1421,52 @@ export const demoBackend: Backend = {
       const file = new File([blob], submission.original_name, { type: 'text/plain' })
       return demoBackend.submissions.replace(submission.id, file)
     },
+    stickers: {
+      async list(submissionId: string) {
+        const profile = requireSession()
+        const db = loadDb()
+        const submission = db.submissions.find((s) => s.id === submissionId)
+        if (!submission) throw new Error('Работа не найдена')
+        if (!canManageSubmission(db, profile, submission)) {
+          throw new Error('Нет доступа к этой работе')
+        }
+        return db.stickers
+          .filter((sticker) => sticker.submission_id === submissionId)
+          .sort((a, b) => a.created_at.localeCompare(b.created_at))
+      },
+      async add(submissionId: string, emoji: string) {
+        const admin = requireAdmin()
+        const db = loadDb()
+        const submission = db.submissions.find((s) => s.id === submissionId)
+        if (!submission) throw new Error('Работа не найдена')
+        if (!canManageSubmission(db, admin, submission)) {
+          throw new Error('Нет доступа к этой работе')
+        }
+        const sticker = {
+          id: demoId(),
+          submission_id: submissionId,
+          teacher_id: admin.id,
+          emoji,
+          created_at: new Date().toISOString(),
+        }
+        db.stickers.push(sticker)
+        saveDb()
+        return { ...sticker }
+      },
+      async remove(id: string) {
+        const admin = requireAdmin()
+        const db = loadDb()
+        const sticker = db.stickers.find((item) => item.id === id)
+        if (!sticker) throw new Error('Реакция не найдена')
+        const submission = db.submissions.find((s) => s.id === sticker.submission_id)
+        if (!submission) throw new Error('Работа не найдена')
+        if (!canManageSubmission(db, admin, submission)) {
+          throw new Error('Нет доступа к этой работе')
+        }
+        db.stickers = db.stickers.filter((item) => item.id !== id)
+        saveDb()
+      },
+    },
     async cleanupReviewedFiles() {
       const admin = requireAdmin()
       const db = loadDb()
