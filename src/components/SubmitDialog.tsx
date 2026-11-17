@@ -106,8 +106,8 @@ export function SubmitDialog({
     try {
       const result = file
         ? submission
-          ? await backend.submissions.replace(submission.id, file, setProgress, text || null)
-          : await backend.submissions.upload(assignment.id, file, setProgress, text || null)
+          ? await backend.submissions.replace(submission.id, file, setProgress, text || undefined)
+          : await backend.submissions.upload(assignment.id, file, setProgress, text || undefined)
         : await backend.submissions.submitText(assignment.id, text)
       if (file) setProgress(100)
       toast.success(

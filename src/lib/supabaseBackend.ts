@@ -372,18 +372,23 @@ async function storeSubmission(
 
   await uploadFileToStorage('submissions', path, file, mime, onProgress)
 
-  const payload = {
+  const payload: Record<string, unknown> = {
     file_path: path,
     original_name: sanitizeFileName(file.name),
     mime,
     size: file.size,
-    answer_text:
-      answerText === undefined ? (existing?.answer_text ?? null) : normalizeAnswerText(answerText),
     submitted_at: new Date().toISOString(),
     status: 'submitted' as const,
     version,
     reviewed_at: null,
     file_deleted_at: null,
+  }
+  // Не отправляем answer_text, пока он реально не нужен: так загрузка файла
+  // продолжает работать и до применения миграции с новой колонкой.
+  if (answerText !== undefined) {
+    payload.answer_text = normalizeAnswerText(answerText)
+  } else if (existing?.answer_text != null) {
+    payload.answer_text = existing.answer_text
   }
 
   let submission: Submission | null = null
