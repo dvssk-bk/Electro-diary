@@ -104,8 +104,20 @@ export interface Backend {
     mine: () => Promise<Submission[]>
     list: (disciplineId: string, filters?: SubmissionFilters) => Promise<WorkRow[]>
     get: (id: string) => Promise<Submission>
-    upload: (assignmentId: string, file: File, onProgress?: UploadProgress) => Promise<Submission>
-    replace: (submissionId: string, file: File, onProgress?: UploadProgress) => Promise<Submission>
+    upload: (
+      assignmentId: string,
+      file: File,
+      onProgress?: UploadProgress,
+      answerText?: string | null,
+    ) => Promise<Submission>
+    replace: (
+      submissionId: string,
+      file: File,
+      onProgress?: UploadProgress,
+      answerText?: string | null,
+    ) => Promise<Submission>
+    /** Создаёт или обновляет сдачу с коротким текстовым ответом без нового файла. */
+    submitText: (assignmentId: string, text: string) => Promise<Submission>
     setGrade: (
       submissionId: string,
       grade: number | null,

@@ -1,8 +1,9 @@
-import { useRef, useState, type DragEvent } from 'react'
+import { useEffect, useRef, useState, type DragEvent } from 'react'
 import {
   FileUp,
   Info,
   Loader2,
+  MessageSquare,
   Paperclip,
   Replace,
   TriangleAlert,
@@ -20,6 +21,7 @@ import {
 } from '../lib/fileTypes'
 import { formatSize } from '../lib/format'
 import { uploadLimitBytes } from '../lib/supabase'
+import { ANSWER_TEXT_LIMIT, validateAnswerText } from '../lib/answerText'
 import { useToast } from '../context/ToastContext'
 
 interface SubmitDialogProps {
@@ -38,6 +40,7 @@ export function SubmitDialog({
   onUploaded,
 }: SubmitDialogProps) {
   const [file, setFile] = useState<File | null>(null)
+  const [answerText, setAnswerText] = useState('')
   const [error, setError] = useState('')
   const [progress, setProgress] = useState(0)
   const [busy, setBusy] = useState(false)
@@ -45,9 +48,18 @@ export function SubmitDialog({
   const inputRef = useRef<HTMLInputElement>(null)
   const toast = useToast()
 
+  useEffect(() => {
+    if (!open) return
+    setFile(null)
+    setAnswerText(submission?.answer_text ?? '')
+    setError('')
+    setProgress(0)
+  }, [open, assignment?.id, submission?.id, submission?.answer_text])
+
   const handleClose = () => {
     if (busy) return
     setFile(null)
+    setAnswerText('')
     setError('')
     setProgress(0)
     onClose()
@@ -78,21 +90,36 @@ export function SubmitDialog({
 
   const handleSubmit = async () => {
     if (!assignment) return
-    if (!file) {
-      setError('Выберите файл для загрузки')
+    const textError = validateAnswerText(answerText)
+    if (textError) {
+      setError(textError)
+      return
+    }
+    const text = answerText.trim()
+    if (!file && !text) {
+      setError('Прикрепите файл или напишите текст ответа')
       return
     }
     setBusy(true)
     setError('')
-    setProgress(1)
+    if (file) setProgress(1)
     try {
-      const result = submission
-        ? await backend.submissions.replace(submission.id, file, setProgress)
-        : await backend.submissions.upload(assignment.id, file, setProgress)
-      setProgress(100)
-      toast.success(submission ? 'Новая версия работы загружена' : 'Работа сдана! Отметка «+» появилась в журнале')
+      const result = file
+        ? submission
+          ? await backend.submissions.replace(submission.id, file, setProgress, text || null)
+          : await backend.submissions.upload(assignment.id, file, setProgress, text || null)
+        : await backend.submissions.submitText(assignment.id, text)
+      if (file) setProgress(100)
+      toast.success(
+        file
+          ? submission
+            ? 'Новая версия работы загружена'
+            : 'Работа сдана! Отметка «+» появилась в журнале'
+          : 'Текстовый ответ сохранён',
+      )
       onUploaded(result)
       setFile(null)
+      setAnswerText('')
       setProgress(0)
       onClose()
     } catch (err) {
@@ -110,7 +137,7 @@ export function SubmitDialog({
     <Modal
       open={open}
       onClose={handleClose}
-      title={submission ? 'Заменить файл работы' : 'Сдать работу'}
+      title={submission ? 'Дополнить работу' : 'Сдать работу'}
       subtitle={assignment.title}
       size="md"
       closeOnBackdrop={!busy}
@@ -130,6 +157,37 @@ export function SubmitDialog({
             </div>
           </div>
         ) : null}
+
+        <div className="submit-text">
+          <div className="submit-text__head">
+            <span>
+              <MessageSquare size={16} /> Ответ текстом
+            </span>
+            <small
+              className={
+                answerText.length >= ANSWER_TEXT_LIMIT ? 'submit-text__count is-limit' : 'submit-text__count'
+              }
+            >
+              {answerText.length}/{ANSWER_TEXT_LIMIT}
+            </small>
+          </div>
+          <textarea
+            className="submit-text__area"
+            rows={3}
+            maxLength={ANSWER_TEXT_LIMIT}
+            value={answerText}
+            onChange={(event) => {
+              setAnswerText(event.target.value)
+              setError('')
+            }}
+            placeholder="Напишите короткий ответ, если задание не требует файла"
+            disabled={busy}
+            data-testid="answer-text"
+          />
+          <span className="submit-text__hint">
+            Необязательно. Можно сдать только текстом, только файлом или приложить и то, и другое.
+          </span>
+        </div>
 
         <div
           className={`dropzone ${dragging ? 'is-dragging' : ''} ${file ? 'has-file' : ''}`}
@@ -208,8 +266,8 @@ export function SubmitDialog({
           <div className="hint">
             <Info size={16} />
             <span>
-              Файл привяжется к заданию и вашему профилю. Заменить его можно, пока преподаватель
-              не поставил оценку.
+              Текст ответа и файл привяжутся к заданию и вашему профилю. Изменить ответ можно,
+              пока преподаватель не поставил оценку.
             </span>
           </div>
         )}
@@ -220,7 +278,7 @@ export function SubmitDialog({
           </div>
         ) : null}
 
-        {busy || progress > 0 ? (
+        {file && (busy || progress > 0) ? (
           <div className="progress-wrap" data-testid="upload-progress">
             <div className="progress-track">
               <div className="progress-bar" style={{ width: `${progress}%` }} />
@@ -237,17 +295,27 @@ export function SubmitDialog({
             type="button"
             className="btn btn--primary"
             onClick={handleSubmit}
-            disabled={busy || !file}
+            disabled={busy || (!file && !answerText.trim())}
             data-testid="submit-upload"
           >
             {busy ? (
               <Loader2 className="spin" size={17} />
+            ) : !file ? (
+              <MessageSquare size={17} />
             ) : submission ? (
               <Replace size={17} />
             ) : (
               <FileUp size={17} />
             )}
-            {busy ? 'Загружаем…' : submission ? 'Загрузить новую версию' : 'Сдать работу'}
+            {busy
+              ? file
+                ? 'Загружаем…'
+                : 'Сохраняем…'
+              : !file
+                ? 'Сохранить ответ'
+                : submission
+                  ? 'Загрузить новую версию'
+                  : 'Сдать работу'}
           </button>
         </div>
       </div>

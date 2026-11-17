@@ -7,6 +7,7 @@ import {
   FileX,
   Filter,
   FolderOpen,
+  MessageSquare,
   MessageSquareWarning,
   RefreshCw,
   Search,
@@ -310,23 +311,41 @@ export function AdminAssignmentsPage() {
                         ) : null}
                       </td>
                       <td>
-                        <span
-                          className={`works-file ${
-                            row.submission.file_deleted_at ? 'works-file--deleted' : ''
-                          }`}
-                        >
-                          {row.submission.file_deleted_at ? (
-                            <FileX size={15} />
-                          ) : (
-                            <FolderOpen size={15} />
-                          )}
-                          {row.submission.original_name || 'без файла'}
-                        </span>
-                        <span className="muted">
-                          {row.submission.file_deleted_at
-                            ? 'удалён после проверки'
-                            : formatSize(row.submission.size)}
-                        </span>
+                        {row.submission.original_name ||
+                        row.submission.file_path ||
+                        row.submission.file_deleted_at ? (
+                          <>
+                            <span
+                              className={`works-file ${
+                                row.submission.file_deleted_at ? 'works-file--deleted' : ''
+                              }`}
+                            >
+                              {row.submission.file_deleted_at ? (
+                                <FileX size={15} />
+                              ) : (
+                                <FolderOpen size={15} />
+                              )}
+                              {row.submission.original_name || 'без файла'}
+                            </span>
+                            <span className="muted">
+                              {row.submission.file_deleted_at
+                                ? 'удалён после проверки'
+                                : formatSize(row.submission.size)}
+                            </span>
+                          </>
+                        ) : null}
+                        {row.submission.answer_text ? (
+                          <span
+                            className="works-answer"
+                            title={row.submission.answer_text}
+                          >
+                            <MessageSquare size={14} /> {row.submission.answer_text}
+                          </span>
+                        ) : !row.submission.file_path ? (
+                          <span className="works-file">
+                            <FolderOpen size={15} /> без файла
+                          </span>
+                        ) : null}
                       </td>
                       <td>
                         <span>{formatDateTime(row.submission.submitted_at)}</span>

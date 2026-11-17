@@ -9,6 +9,7 @@ import {
   FileUp,
   FileX,
   FolderOpen,
+  MessageSquare,
   MessageSquareWarning,
   RefreshCw,
   Replace,
@@ -303,27 +304,42 @@ export function StudentAssignmentsPage() {
                 <AssignmentAttachments attachments={assignment.attachments} />
 
                 {submission ? (
-                  <div
-                    className={`assignment-card__file ${
-                      submission.file_deleted_at ? 'assignment-card__file--deleted' : ''
-                    }`}
-                  >
-                    {submission.file_deleted_at ? (
-                      <FileX size={15} />
-                    ) : (
-                      <FileUp size={15} />
-                    )}
-                    <div>
-                      <strong>{submission.original_name || 'Файл не прикреплён'}</strong>
-                      <span>
-                        {submission.file_deleted_at
-                          ? 'файл удалён после проверки · данные работы сохранены'
-                          : `${formatSize(submission.size)} · сдано ${formatDateTime(
-                              submission.submitted_at,
-                            )}`}
-                      </span>
-                    </div>
-                  </div>
+                  <>
+                    {submission.file_path ||
+                    submission.file_deleted_at ||
+                    !submission.answer_text ? (
+                      <div
+                        className={`assignment-card__file ${
+                          submission.file_deleted_at ? 'assignment-card__file--deleted' : ''
+                        }`}
+                      >
+                        {submission.file_deleted_at ? (
+                          <FileX size={15} />
+                        ) : (
+                          <FileUp size={15} />
+                        )}
+                        <div>
+                          <strong>{submission.original_name || 'Файл не прикреплён'}</strong>
+                          <span>
+                            {submission.file_deleted_at
+                              ? 'файл удалён после проверки · данные работы сохранены'
+                              : `${formatSize(submission.size)} · сдано ${formatDateTime(
+                                  submission.submitted_at,
+                                )}`}
+                          </span>
+                        </div>
+                      </div>
+                    ) : null}
+                    {submission.answer_text ? (
+                      <div className="assignment-card__answer">
+                        <MessageSquare size={15} />
+                        <div>
+                          <strong>Ответ текстом</strong>
+                          <span>{submission.answer_text}</span>
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
                 ) : null}
 
                 {graded ? (
@@ -363,7 +379,12 @@ export function StudentAssignmentsPage() {
                           }}
                           data-testid={`replace-${assignment.id}`}
                         >
-                          <Replace size={15} /> {hasRemarks ? 'Переделать' : 'Заменить файл'}
+                          <Replace size={15} />{' '}
+                          {hasRemarks
+                            ? 'Переделать'
+                            : submission.file_path
+                              ? 'Заменить файл'
+                              : 'Изменить ответ'}
                         </button>
                       ) : null}
                     </>

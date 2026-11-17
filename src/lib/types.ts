@@ -137,6 +137,8 @@ export interface Submission {
   original_name: string | null
   mime: string | null
   size: number | null
+  /** Короткий текстовый ответ студента (до 150 символов). */
+  answer_text: string | null
   submitted_at: string
   grade: number | null
   status: SubmissionStatus

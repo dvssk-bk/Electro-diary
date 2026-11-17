@@ -49,6 +49,7 @@ import {
 import { validateGrade } from '../grades'
 import { normalizeProfile, validatePassword, validateProfile } from '../profile'
 import { normalizeFullName, validateFullName } from '../name'
+import { normalizeAnswerText, validateAnswerText } from '../answerText'
 import { buildTestAssignments, TEST_STUDENTS } from '../testData'
 import { readFileAsDataUrl } from '../avatar'
 import { uploadLimitBytes } from '../supabase'
@@ -1183,18 +1184,24 @@ export const demoBackend: Backend = {
       }
       return { ...submission }
     },
-    async upload(assignmentId: string, file: File) {
+    async upload(assignmentId: string, file: File, onProgress?: UploadProgress, answerText?: string | null) {
       const profile = requireStudent()
-      const stored = await storeFile(profile, assignmentId, file)
+      const textError = validateAnswerText(answerText)
+      if (textError) throw new Error(textError)
+      const stored = await storeFile(profile, assignmentId, file, onProgress)
       const db = loadDb()
       const timestamp = new Date().toISOString()
       let submission: Submission
       if (stored.existing) {
-        submission = stored.existing
+        // storeFile() читает базу из localStorage заново, поэтому берём запись
+        // из текущего db, иначе изменения останутся в чужой копии объекта.
+        submission =
+          db.submissions.find((item) => item.id === stored.existing!.id) ?? stored.existing
         submission.file_path = stored.path
         submission.original_name = stored.name
         submission.mime = stored.mime
         submission.size = stored.size
+        if (answerText !== undefined) submission.answer_text = normalizeAnswerText(answerText)
         submission.version = stored.version
         submission.status = 'submitted'
         submission.submitted_at = timestamp
@@ -1210,6 +1217,7 @@ export const demoBackend: Backend = {
           original_name: stored.name,
           mime: stored.mime,
           size: stored.size,
+          answer_text: normalizeAnswerText(answerText),
           submitted_at: timestamp,
           grade: null,
           status: 'submitted',
@@ -1234,13 +1242,60 @@ export const demoBackend: Backend = {
       saveDb()
       return { ...submission }
     },
-    async replace(submissionId: string, file: File) {
+    async replace(submissionId: string, file: File, onProgress?: UploadProgress, answerText?: string | null) {
       const profile = requireStudent()
       const db = loadDb()
       const submission = db.submissions.find((s) => s.id === submissionId)
       if (!submission) throw new Error('Работа не найдена')
       if (submission.student_id !== profile.id) throw new Error('Это чужая работа')
-      return demoBackend.submissions.upload(submission.assignment_id, file)
+      return demoBackend.submissions.upload(submission.assignment_id, file, onProgress, answerText)
+    },
+    async submitText(assignmentId: string, text: string) {
+      const profile = requireStudent()
+      const textError = validateAnswerText(text)
+      if (textError) throw new Error(textError)
+      const answerText = normalizeAnswerText(text)
+      if (!answerText) throw new Error('Введите текст ответа или приложите файл')
+
+      const db = loadDb()
+      ensureAssignmentForStudent(db, assignmentId, profile)
+      const existing = db.submissions.find(
+        (s) => s.assignment_id === assignmentId && s.student_id === profile.id,
+      )
+      if (existing?.grade != null) {
+        throw new Error('Работа уже оценена — изменить ответ больше нельзя')
+      }
+
+      const timestamp = new Date().toISOString()
+      if (existing) {
+        existing.answer_text = answerText
+        existing.status = 'submitted'
+        existing.reviewed_at = null
+        existing.updated_at = timestamp
+        saveDb()
+        return { ...existing }
+      }
+
+      const submission: Submission = {
+        id: demoId(),
+        assignment_id: assignmentId,
+        student_id: profile.id,
+        file_path: null,
+        original_name: null,
+        mime: null,
+        size: null,
+        answer_text: answerText,
+        submitted_at: timestamp,
+        grade: null,
+        status: 'submitted',
+        version: 1,
+        reviewed_at: null,
+        file_deleted_at: null,
+        updated_at: timestamp,
+      }
+      db.submissions.push(submission)
+      saveDb()
+      return { ...submission }
     },
     async setGrade(
       submissionId: string,
@@ -1308,6 +1363,7 @@ export const demoBackend: Backend = {
         original_name: null,
         mime: null,
         size: null,
+        answer_text: null,
         submitted_at: timestamp,
         grade: null,
         status: 'submitted',

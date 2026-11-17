@@ -37,6 +37,7 @@ import {
 import { validateGrade } from './grades'
 import { normalizeProfile, validatePassword, validateProfile } from './profile'
 import { normalizeFullName, validateFullName } from './name'
+import { normalizeAnswerText, validateAnswerText } from './answerText'
 import { buildTestAssignments, TEST_STUDENTS } from './testData'
 
 function client(): SupabaseClient {
@@ -338,8 +339,11 @@ async function storeSubmission(
   assignmentId: string,
   file: File,
   onProgress?: UploadProgress,
+  answerText?: string | null,
 ): Promise<Submission> {
   const db = client()
+  const textError = validateAnswerText(answerText)
+  if (textError) throw new Error(textError)
   const { data: assignment, error: assignmentError } = await db
     .from('assignments')
     .select('*')
@@ -373,6 +377,8 @@ async function storeSubmission(
     original_name: sanitizeFileName(file.name),
     mime,
     size: file.size,
+    answer_text:
+      answerText === undefined ? (existing?.answer_text ?? null) : normalizeAnswerText(answerText),
     submitted_at: new Date().toISOString(),
     status: 'submitted' as const,
     version,
@@ -425,6 +431,85 @@ async function storeSubmission(
   if (versionError) console.warn('Не удалось сохранить версию файла', versionError.message)
 
   return submission
+}
+
+async function storeTextSubmission(
+  profile: Profile,
+  assignmentId: string,
+  text: string,
+): Promise<Submission> {
+  const textError = validateAnswerText(text)
+  if (textError) throw new Error(textError)
+  const answerText = normalizeAnswerText(text)
+  if (!answerText) throw new Error('Введите текст ответа или приложите файл')
+
+  const db = client()
+  const { data: assignment, error: assignmentError } = await db
+    .from('assignments')
+    .select('id, group_name')
+    .eq('id', assignmentId)
+    .maybeSingle()
+  if (assignmentError) throw new Error(assignmentError.message)
+  if (!assignment) throw new Error('Задание не найдено')
+  if ((assignment as { group_name: string }).group_name !== profile.group_name) {
+    throw new Error('Это задание другой группы')
+  }
+
+  const { data: existing, error: existingError } = await db
+    .from('submissions')
+    .select('*')
+    .eq('assignment_id', assignmentId)
+    .eq('student_id', profile.id)
+    .maybeSingle()
+  if (existingError) throw new Error(existingError.message)
+  if (existing?.grade != null) {
+    throw new Error('Работа уже оценена — изменить ответ больше нельзя')
+  }
+
+  const timestamp = new Date().toISOString()
+  if (existing) {
+    const { data, error } = await db
+      .from('submissions')
+      .update({
+        answer_text: answerText,
+        status: 'submitted',
+        reviewed_at: null,
+        updated_at: timestamp,
+      })
+      .eq('id', existing.id)
+      .select('*')
+      .single()
+    if (error) {
+      throw new Error(
+        error.code === 'PGRST116' || error.code === '42501'
+          ? 'Работа уже оценена или нет прав на изменение ответа.'
+          : error.message,
+      )
+    }
+    return data as Submission
+  }
+
+  const { data, error } = await db
+    .from('submissions')
+    .insert({
+      assignment_id: assignmentId,
+      student_id: profile.id,
+      file_path: null,
+      original_name: null,
+      mime: null,
+      size: null,
+      answer_text: answerText,
+      submitted_at: timestamp,
+      status: 'submitted',
+      version: 1,
+      reviewed_at: null,
+      file_deleted_at: null,
+      updated_at: timestamp,
+    })
+    .select('*')
+    .single()
+  if (error) throw new Error(error.message)
+  return data as Submission
 }
 
 export const supabaseBackend: Backend = {
@@ -1528,11 +1613,11 @@ export const supabaseBackend: Backend = {
       if (error) throw new Error(error.message)
       return data as Submission
     },
-    async upload(assignmentId, file, onProgress) {
+    async upload(assignmentId, file, onProgress, answerText) {
       const profile = await requireStudent()
-      return storeSubmission(profile, assignmentId, file, onProgress)
+      return storeSubmission(profile, assignmentId, file, onProgress, answerText)
     },
-    async replace(submissionId, file, onProgress) {
+    async replace(submissionId, file, onProgress, answerText) {
       const profile = await requireStudent()
       const { data: submission, error } = await client()
         .from('submissions')
@@ -1542,7 +1627,11 @@ export const supabaseBackend: Backend = {
       if (error) throw new Error(error.message)
       if (!submission) throw new Error('Работа не найдена')
       if (submission.student_id !== profile.id) throw new Error('Это чужая работа')
-      return storeSubmission(profile, submission.assignment_id, file, onProgress)
+      return storeSubmission(profile, submission.assignment_id, file, onProgress, answerText)
+    },
+    async submitText(assignmentId: string, text: string) {
+      const profile = await requireStudent()
+      return storeTextSubmission(profile, assignmentId, text)
     },
     async setGrade(
       submissionId: string,

@@ -13,7 +13,7 @@ import type {
   SubmissionVersion,
 } from '../types'
 const DB_KEY = 'diary_demo_v5'
-const DB_VERSION = 7 as const
+const DB_VERSION = 8 as const
 
 export interface DemoUser {
   login: string
@@ -83,14 +83,17 @@ export function loadDb(): DemoDb {
     if (raw) {
       const parsed = JSON.parse(raw) as DemoDb
       if (parsed && parsed.version > 5 && parsed.version < DB_VERSION) {
-        // Версия 7: апелляции на оценку, фон страницы и положение обложки.
-        // Старые профили получают пустые поля, данные не трогаем.
+        // Версия 8: текстовый ответ к заданию. Старые сдачи получают пустое
+        // поле, данные не трогаем. Заодно дозаполняем поля версий 6–7.
         parsed.version = DB_VERSION
         parsed.gradeAppeals ??= []
         parsed.extraAssignments ??= []
         parsed.extraSubmissions ??= []
         parsed.assignmentAttachments ??= []
         parsed.groupViewers ??= []
+        for (const submission of parsed.submissions ?? []) {
+          submission.answer_text ??= null
+        }
         for (const user of parsed.users) {
           user.profile.profile_cover_url ??= null
           user.profile.profile_cover_zoom ??= null
@@ -103,14 +106,17 @@ export function loadDb(): DemoDb {
         return cache
       }
       if (parsed && parsed.version === 5) {
-        // Версия 6: рамка аватара и день рождения. Старые профили
-        // просто получают пустые поля, данные не трогаем.
+        // Версия 8: рамка аватара, день рождения, апелляции, фон страницы,
+        // обложка и текстовый ответ. Данные не трогаем, только дозаполняем.
         parsed.version = DB_VERSION
         parsed.gradeAppeals ??= []
         parsed.extraAssignments ??= []
         parsed.extraSubmissions ??= []
         parsed.assignmentAttachments ??= []
         parsed.groupViewers ??= []
+        for (const submission of parsed.submissions ?? []) {
+          submission.answer_text ??= null
+        }
         for (const user of parsed.users) {
           user.profile.birthday_md ??= null
           user.profile.avatar_frame ??= null
@@ -136,6 +142,9 @@ export function loadDb(): DemoDb {
         parsed.extraSubmissions ??= []
         parsed.assignmentAttachments ??= []
         parsed.groupViewers ??= []
+        for (const submission of parsed.submissions ?? []) {
+          submission.answer_text ??= null
+        }
         for (const user of parsed.users) {
           user.profile.profile_cover ??= null
           user.profile.profile_cover_url ??= null

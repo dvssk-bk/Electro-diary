@@ -9,6 +9,7 @@ import {
   Info,
   Loader2,
   Highlighter,
+  MessageSquare,
   MessageSquareWarning,
   PencilLine,
   Save,
@@ -634,7 +635,8 @@ export function ReviewDrawer({
               <div className="review-toolbar__file">
                 {kind ? <span className="file-kind">{kind.label}</span> : null}
                 <span title={submission.original_name ?? undefined}>
-                  {submission.original_name || 'Файл не прикреплён'}
+                  {submission.original_name ||
+                    (submission.answer_text ? 'Ответ текстом' : 'Файл не прикреплён')}
                 </span>
                 {submission.size ? (
                   <span className="muted">{formatSize(submission.size)}</span>
@@ -677,6 +679,15 @@ export function ReviewDrawer({
               </div>
             ) : null}
 
+            {submission.answer_text ? (
+              <div className="review-answer" data-testid="review-answer-text">
+                <div className="review-answer__head">
+                  <MessageSquare size={15} /> Ответ студента
+                </div>
+                <p>{submission.answer_text}</p>
+              </div>
+            ) : null}
+
             <div className="review-viewer">
               {fileError ? (
                 <div className="viewer-fallback">
@@ -699,10 +710,13 @@ export function ReviewDrawer({
               ) : !submission.file_path ? (
                 <div className="viewer-fallback">
                   <Info size={30} />
-                  <h3>Файл не прикреплён</h3>
+                  <h3>
+                    {submission.answer_text ? 'Работа сдана текстом' : 'Файл не прикреплён'}
+                  </h3>
                   <p>
-                    Преподаватель отметил сдачу вручную. Студент может прикрепить файл из
-                    вкладки «Задания», пока оценка не выставлена.
+                    {submission.answer_text
+                      ? 'Файл не прикреплён — преподаватель увидит текстовый ответ выше.'
+                      : 'Преподаватель отметил сдачу вручную. Студент может прикрепить файл из вкладки «Задания», пока оценка не выставлена.'}
                   </p>
                 </div>
               ) : !blob ? (
