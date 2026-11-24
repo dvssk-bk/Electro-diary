@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+﻿import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import {
   BookOpen,
   Check,
@@ -37,8 +37,14 @@ import { gradeLabel, gradeTypeLabel, normalizeGradeType, validateGrade } from '.
 import { fileKind } from '../lib/fileTypes'
 import { useToast } from '../context/ToastContext'
 import { useAuth } from '../context/AuthContext'
-
-const STICKER_OPTIONS = ['👍', '🔥', '📚', '🎯', '💡', '✅', '😄', '🤔'] as const
+import { StickerBurst } from './StickerBurst'
+import {
+  STICKER_OPTIONS,
+  stickerLabel,
+  stickerTone,
+  type StickerOption,
+  type StickerTone,
+} from '../lib/stickers'
 
 export interface ReviewMeta {
   studentName?: string
@@ -251,6 +257,11 @@ export function ReviewDrawer({
   const [textValue, setTextValue] = useState('')
   const [savingText, setSavingText] = useState(false)
   const [stickers, setStickers] = useState<SubmissionSticker[]>([])
+  const [stickerEffect, setStickerEffect] = useState<{
+    emoji: string
+    tone: StickerTone
+    id: number
+  } | null>(null)
   const composerWrapRef = useRef<HTMLDivElement>(null)
 
   const loadAnnotations = useCallback(async (id: string) => {
@@ -290,6 +301,7 @@ export function ReviewDrawer({
     setAppealText('')
     setAppealError('')
     setStickers([])
+    setStickerEffect(null)
 
     const load = async () => {
       try {
@@ -327,6 +339,12 @@ export function ReviewDrawer({
     setPointsDraft(submission.grade != null ? String(submission.grade) : '')
   }, [open, submission?.id, submission?.grade])
 
+  useEffect(() => {
+    if (!stickerEffect) return
+    const timer = window.setTimeout(() => setStickerEffect(null), 1000)
+    return () => window.clearTimeout(timer)
+  }, [stickerEffect])
+
   const gradeType = normalizeGradeType(meta?.gradeType)
   const latestVersionAt = versions.reduce((latest, version) => {
     const time = new Date(version.created_at).getTime()
@@ -352,6 +370,7 @@ export function ReviewDrawer({
     mode === 'admin' ? sticker.teacher_id === profile?.id : true,
   )
   const activeSticker = mode === 'admin' ? visibleStickers[visibleStickers.length - 1]?.emoji ?? null : null
+  const firstNegativeIndex = STICKER_OPTIONS.findIndex((option) => option.tone === 'negative')
   const canMark =
     mode === 'admin' && !fileDeleted && kind && ['pdf', 'docx', 'txt'].includes(kind.preview)
 
@@ -610,10 +629,23 @@ export function ReviewDrawer({
     }
   }
 
-  const addSticker = async (emoji: string) => {
+  const addSticker = async (option: StickerOption) => {
     if (!submission) return
-    const created = await backend.submissions.stickers.add(submission.id, emoji)
-    setStickers((prev) => [...prev, created])
+    const own = stickers.find(
+      (sticker) => sticker.teacher_id === profile?.id && sticker.emoji === option.emoji,
+    )
+    if (own) {
+      await removeSticker(own)
+      return
+    }
+    setStickerEffect({ emoji: option.emoji, tone: option.tone, id: Date.now() })
+    try {
+      const created = await backend.submissions.stickers.add(submission.id, option.emoji)
+      setStickers((prev) => [...prev, created])
+    } catch (err) {
+      setStickerEffect(null)
+      toast.error((err as Error).message)
+    }
   }
 
   const removeSticker = async (sticker: SubmissionSticker) => {
@@ -658,7 +690,7 @@ export function ReviewDrawer({
           <p>{error}</p>
         </div>
       ) : submission ? (
-        <div className="review-layout">
+        <div className={`review-layout ${stickerEffect?.tone === 'negative' ? 'is-hit' : ''}`}>
           <section className="review-main">
             <div className="review-toolbar">
               <div className="review-toolbar__file">
@@ -710,28 +742,55 @@ export function ReviewDrawer({
 
             {mode === 'admin' && submission ? (
               <div className="sticker-row" data-testid="sticker-row">
-                {STICKER_OPTIONS.map((emoji) => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    className={`sticker-btn ${activeSticker === emoji ? 'is-active' : ''}`}
-                    onClick={() => addSticker(emoji)}
-                    aria-label={`Поставить стикер ${emoji}`}
-                    data-testid={`sticker-${emoji}`}
-                  >
-                    {emoji}
-                  </button>
+                {STICKER_OPTIONS.map((option, index) => (
+                  <Fragment key={option.emoji}>
+                    {index === firstNegativeIndex ? (
+                      <span className="sticker-divider" aria-hidden="true" />
+                    ) : null}
+                    <button
+                      type="button"
+                      className={`sticker-btn sticker-btn--${option.tone} ${
+                        activeSticker === option.emoji ? 'is-active' : ''
+                      }`}
+                      onClick={() => void addSticker(option)}
+                      aria-label={`${option.label}: ${option.hint}`}
+                      aria-pressed={activeSticker === option.emoji}
+                      title={`${option.label} — ${option.hint}`}
+                      data-testid={`sticker-${option.emoji}`}
+                    >
+                      <span className="sticker-btn__emoji">{option.emoji}</span>
+                    </button>
+                  </Fragment>
                 ))}
               </div>
             ) : null}
 
             {submission && visibleStickers.length ? (
               <div className="sticker-list" data-testid="sticker-list">
-                {visibleStickers.map((sticker) => (
-                  <span key={sticker.id} className="sticker-chip" data-testid="sticker-chip">
-                    {sticker.emoji}
-                  </span>
-                ))}
+                {visibleStickers.map((sticker) =>
+                  mode === 'admin' ? (
+                    <button
+                      key={sticker.id}
+                      type="button"
+                      className={`sticker-chip sticker-chip--${stickerTone(sticker.emoji)} sticker-chip--action`}
+                      onClick={() => void removeSticker(sticker)}
+                      title={`Убрать реакцию «${stickerLabel(sticker.emoji)}»`}
+                      aria-label={`Убрать реакцию ${stickerLabel(sticker.emoji)}`}
+                      data-testid="sticker-chip"
+                    >
+                      {sticker.emoji}
+                    </button>
+                  ) : (
+                    <span
+                      key={sticker.id}
+                      className={`sticker-chip sticker-chip--${stickerTone(sticker.emoji)}`}
+                      title={stickerLabel(sticker.emoji)}
+                      data-testid="sticker-chip"
+                    >
+                      {sticker.emoji}
+                    </span>
+                  ),
+                )}
               </div>
             ) : null}
 
@@ -1273,6 +1332,13 @@ export function ReviewDrawer({
           </div>
         </div>
       </Modal>
+      {stickerEffect ? (
+        <StickerBurst
+          emoji={stickerEffect.emoji}
+          tone={stickerEffect.tone}
+          burstId={stickerEffect.id}
+        />
+      ) : null}
     </>
   )
 }

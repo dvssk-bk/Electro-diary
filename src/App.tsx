@@ -14,6 +14,7 @@ import { AdminAssignmentsPage } from './pages/AdminAssignmentsPage'
 import { AdminExtraPage } from './pages/AdminExtraPage'
 import { AdminGroupsPage } from './pages/AdminGroupsPage'
 import { TeacherProfilePage } from './pages/TeacherProfilePage'
+import { StickerPlaygroundPage } from './pages/StickerPlaygroundPage'
 import { SeasonalDecor } from './components/SeasonalDecor'
 import { BirthdayDecor } from './components/BirthdayDecor'
 import { Loader2 } from 'lucide-react'
@@ -152,6 +153,7 @@ export default function App() {
               </RequireAuth>
             }
           />
+          <Route path="/reactions" element={<StickerPlaygroundPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </DisciplineProvider>
