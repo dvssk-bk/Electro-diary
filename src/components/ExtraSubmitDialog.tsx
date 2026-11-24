@@ -18,7 +18,7 @@ import {
   isAcceptedFile,
   validateFile,
 } from '../lib/fileTypes'
-import { formatSize } from '../lib/format'
+import { formatSize, shortName } from '../lib/format'
 import { uploadLimitBytes } from '../lib/supabase'
 import { useToast } from '../context/ToastContext'
 
@@ -109,7 +109,11 @@ export function ExtraSubmitDialog({
       open={open}
       onClose={handleClose}
       title={submission ? 'Заменить файл доп. работы' : 'Сдать доп. задание'}
-      subtitle={assignment.title}
+      subtitle={
+        assignment.teacher_name
+          ? `${assignment.title} · ${shortName(assignment.teacher_name)}`
+          : assignment.title
+      }
       size="md"
       closeOnBackdrop={!busy}
     >

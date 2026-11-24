@@ -10,6 +10,7 @@ import {
   Replace,
   Sparkles,
   TriangleAlert,
+  UserRound,
 } from 'lucide-react'
 import { AppShell } from '../components/AppShell'
 import { Modal } from '../components/Modal'
@@ -20,7 +21,7 @@ import { ExtraSubmitDialog } from '../components/ExtraSubmitDialog'
 import { GradeBadge } from '../components/GradeBadge'
 import { useAuth } from '../context/AuthContext'
 import { backend } from '../lib/api'
-import { formatDateTime, formatSize, plural } from '../lib/format'
+import { formatDateTime, formatSize, plural, shortName } from '../lib/format'
 import { isOverdue } from '../lib/grades'
 import type {
   ExtraAssignment,
@@ -184,6 +185,17 @@ export function StudentExtraPage() {
                     <h3>{assignment.title}</h3>
                     <p>{assignment.description || 'Описание не добавлено.'}</p>
 
+                    <div className="extra-teacher">
+                      <UserRound size={13} />
+                      {assignment.teacher_name ? (
+                        <span>
+                          Задание от <strong>{shortName(assignment.teacher_name)}</strong>
+                        </span>
+                      ) : (
+                        <span>Автор не указан</span>
+                      )}
+                    </div>
+
                     {submission ? (
                       <div
                         className={`assignment-card__file ${
@@ -283,7 +295,11 @@ export function StudentExtraPage() {
         open={Boolean(detailsTarget)}
         onClose={() => setDetailsTarget(null)}
         title={detailsTarget ? detailsTarget.title : 'Задание'}
-        subtitle="Доп. задание для всех групп · оценивание 0–100"
+        subtitle={
+          detailsTarget?.teacher_name
+            ? `Доп. задание · ${detailsTarget.teacher_name} · 0–100`
+            : 'Доп. задание для всех групп · оценивание 0–100'
+        }
         size="full"
         className="extra-details-modal"
       >
@@ -343,6 +359,10 @@ export function StudentExtraPage() {
               </span>
               <span>
                 <Sparkles size={14} /> 0–100 баллов
+              </span>
+              <span>
+                <UserRound size={14} />{' '}
+                {detailsTarget.teacher_name || 'Автор не указан'}
               </span>
             </div>
 

@@ -286,6 +286,8 @@ export interface ExtraAssignment {
   due_at: string | null
   created_by: string | null
   created_at: string
+  /** ФИО преподавателя, создавшего задание. Вычисляется на бэкенде. */
+  teacher_name?: string | null
 }
 
 export interface NewExtraAssignment {

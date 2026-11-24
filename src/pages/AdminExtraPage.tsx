@@ -12,6 +12,7 @@ import {
   Save,
   Sparkles,
   Trash2,
+  UserRound,
   Users,
 } from 'lucide-react'
 import { AppShell } from '../components/AppShell'
@@ -22,7 +23,7 @@ import { ExtraFileDialog } from '../components/ExtraFileDialog'
 import { ExtraLeaderboard } from '../components/ExtraLeaderboard'
 import { useToast } from '../context/ToastContext'
 import { backend } from '../lib/api'
-import { formatDateTime, formatSize, plural } from '../lib/format'
+import { formatDateTime, formatSize, plural, shortName } from '../lib/format'
 import type {
   ExtraAssignment,
   ExtraLeaderboardEntry,
@@ -428,6 +429,12 @@ export function AdminExtraPage() {
                     </p>
                     <div className="extra-admin-card__meta">
                       <span>
+                        <UserRound size={14} />{' '}
+                        {assignment.teacher_name
+                          ? shortName(assignment.teacher_name)
+                          : 'автор не указан'}
+                      </span>
+                      <span>
                         <Users size={14} /> {stats.total}{' '}
                         {plural(stats.total, ['сдача', 'сдачи', 'сдач'])}
                       </span>
@@ -509,7 +516,11 @@ export function AdminExtraPage() {
         open={Boolean(detailsTarget)}
         onClose={() => setDetailsTarget(null)}
         title={detailsTarget ? detailsTarget.title : 'Задание'}
-        subtitle="Общее задание без привязки к дисциплине"
+        subtitle={
+          detailsTarget?.teacher_name
+            ? `Общее задание · ${detailsTarget.teacher_name}`
+            : 'Общее задание без привязки к дисциплине'
+        }
         size="full"
         className="extra-details-modal"
       >
@@ -527,6 +538,14 @@ export function AdminExtraPage() {
                   <CheckCircle2 size={14} /> Оценено
                 </span>
                 <strong>{statsByAssignment.get(detailsTarget.id)?.graded ?? 0}</strong>
+              </div>
+              <div className="extra-details__stat">
+                <span className="extra-details__stat-label">
+                  <UserRound size={14} /> Автор
+                </span>
+                <strong className="extra-details__stat-value">
+                  {detailsTarget.teacher_name || 'не указан'}
+                </strong>
               </div>
               <div className="extra-details__stat">
                 <span className="extra-details__stat-label">

@@ -518,6 +518,37 @@ async function storeTextSubmission(
   return data as Submission
 }
 
+async function attachExtraTeachers(
+  assignments: ExtraAssignment[],
+): Promise<ExtraAssignment[]> {
+  if (!assignments.length) return assignments
+  const teacherIds = [
+    ...new Set(
+      assignments
+        .map((assignment) => assignment.created_by)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ]
+  if (!teacherIds.length) {
+    return assignments.map((assignment) => ({ ...assignment, teacher_name: null }))
+  }
+  const { data, error } = await client()
+    .from('profiles')
+    .select('id, full_name')
+    .in('id', teacherIds)
+  if (error) throw new Error(error.message)
+  const nameById = new Map(
+    ((data ?? []) as Array<{ id: string; full_name: string }>).map((row) => [
+      row.id,
+      row.full_name,
+    ]),
+  )
+  return assignments.map((assignment) => ({
+    ...assignment,
+    teacher_name: assignment.created_by ? nameById.get(assignment.created_by) ?? null : null,
+  }))
+}
+
 export const supabaseBackend: Backend = {
   mode: 'supabase',
 
@@ -1915,7 +1946,7 @@ export const supabaseBackend: Backend = {
         .select('*')
         .order('created_at', { ascending: false })
       if (error) throw new Error(error.message)
-      return (data ?? []) as ExtraAssignment[]
+      return attachExtraTeachers((data ?? []) as ExtraAssignment[])
     },
     async create(input: NewExtraAssignment) {
       const admin = await requireAdmin()
@@ -1934,7 +1965,7 @@ export const supabaseBackend: Backend = {
         .select('*')
         .single()
       if (error) throw new Error(error.message)
-      return data as ExtraAssignment
+      return { ...(data as ExtraAssignment), teacher_name: admin.full_name }
     },
     async update(id: string, input: NewExtraAssignment) {
       await requireAdmin()
@@ -1953,7 +1984,7 @@ export const supabaseBackend: Backend = {
         .select('*')
         .single()
       if (error) throw new Error(error.message)
-      return data as ExtraAssignment
+      return (await attachExtraTeachers([data as ExtraAssignment]))[0]
     },
     async remove(id: string) {
       await requireAdmin()
@@ -2016,8 +2047,11 @@ export const supabaseBackend: Backend = {
       ])
       if (assignmentsResult.error) throw new Error(assignmentsResult.error.message)
       if (studentsResult.error) throw new Error(studentsResult.error.message)
+      const assignmentList = await attachExtraTeachers(
+        (assignmentsResult.data ?? []) as ExtraAssignment[],
+      )
       const assignmentById = new Map(
-        ((assignmentsResult.data ?? []) as ExtraAssignment[]).map((item) => [item.id, item]),
+        assignmentList.map((item) => [item.id, item]),
       )
       const studentById = new Map<string, ExtraWorkRow['student']>()
       for (const row of ((studentsResult.data ?? []) as Array<{

@@ -316,6 +316,16 @@ function findExtraAssignment(
   return db.extraAssignments.find((assignment) => assignment.id === id) ?? null
 }
 
+function withExtraTeacher(
+  assignment: ExtraAssignment,
+  db: ReturnType<typeof loadDb>,
+): ExtraAssignment {
+  const teacher = assignment.created_by
+    ? db.users.find((user) => user.profile.id === assignment.created_by)?.profile
+    : null
+  return { ...assignment, teacher_name: teacher?.full_name ?? null }
+}
+
 function extraRowFor(
   submission: ExtraSubmission,
   db: ReturnType<typeof loadDb>,
@@ -325,7 +335,7 @@ function extraRowFor(
   if (!assignment || !student) return null
   return {
     submission,
-    assignment,
+    assignment: withExtraTeacher(assignment, db),
     student: { id: student.id, full_name: student.full_name, group_name: student.group_name },
   }
 }
@@ -1658,9 +1668,10 @@ export const demoBackend: Backend = {
   extra: {
     async list() {
       requireSession()
-      return [...loadDb().extraAssignments].sort((a, b) =>
-        b.created_at.localeCompare(a.created_at),
-      )
+      const db = loadDb()
+      return db.extraAssignments
+        .map((assignment) => withExtraTeacher(assignment, db))
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
     },
     async create(input: NewExtraAssignment) {
       const admin = requireAdmin()
@@ -1679,7 +1690,7 @@ export const demoBackend: Backend = {
       }
       db.extraAssignments.push(assignment)
       saveDb()
-      return { ...assignment }
+      return withExtraTeacher(assignment, db)
     },
     async update(id: string, input: NewExtraAssignment) {
       requireAdmin()
@@ -1694,7 +1705,7 @@ export const demoBackend: Backend = {
       assignment.description = input.description.trim()
       assignment.due_at = input.due_at
       saveDb()
-      return { ...assignment }
+      return withExtraTeacher(assignment, db)
     },
     async remove(id: string) {
       requireAdmin()
