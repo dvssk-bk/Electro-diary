@@ -27,7 +27,7 @@ export const defaultSubject =
   (import.meta.env.VITE_SUBJECT_NAME || '').trim() || 'Учебная дисциплина'
 export const editingEnabled = import.meta.env.VITE_ENABLE_EDITING === 'true'
 export const onlyofficeUrl = (import.meta.env.VITE_ONLYOFFICE_URL || '').trim()
-export const uploadLimitBytes = 50 * 1024 * 1024
+export const uploadLimitBytes = 15 * 1024 * 1024
 
 if (!supabase && !isDemoMode) {
   // Защитная ветка: сюда попасть не должны, но пусть будет явная ошибка.

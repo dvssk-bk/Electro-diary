@@ -5,7 +5,6 @@ import {
   Loader2,
   Paperclip,
   Replace,
-  TriangleAlert,
   UploadCloud,
   X,
 } from 'lucide-react'
@@ -56,7 +55,7 @@ export function ExtraSubmitDialog({
   const pickFile = (value: File | null | undefined) => {
     if (!value) return
     if (!isAcceptedFile(value)) {
-      setError('Неподдерживаемый формат файла. Выберите Office, PDF, TXT, ZIP, RAR или MP4.')
+      setError('Неподдерживаемый формат файла. Выберите Office, PDF, TXT, ZIP или RAR.')
       setFile(null)
       return
     }
@@ -102,7 +101,6 @@ export function ExtraSubmitDialog({
 
   if (!assignment) return null
   const kind = file ? fileKind(file.name) : null
-  const isVideo = file?.name.toLowerCase().endsWith('.mp4')
 
   return (
     <Modal
@@ -189,30 +187,20 @@ export function ExtraSubmitDialog({
               <strong>Перетащите файл сюда</strong>
               <span>или нажмите, чтобы выбрать на устройстве</span>
               <small>
-                Office, PDF, TXT, ZIP, RAR, MP4 · до{' '}
+                Office, PDF, TXT, ZIP, RAR · до{' '}
                 {Math.round(uploadLimitBytes / 1024 / 1024)} МБ
               </small>
             </div>
           )}
         </div>
 
-        {isVideo ? (
-          <div className="hint hint--amber">
-            <TriangleAlert size={16} />
-            <span>
-              Видео MP4 может быть большим. Лимит Supabase — 50 МБ: если файл не проходит,
-              сожмите видео или прикрепите ссылку внутри архива.
-            </span>
-          </div>
-        ) : (
-          <div className="hint">
-            <Info size={16} />
-            <span>
-              Файл привяжется к доп. заданию и вашему профилю. Заменить его можно, пока
-              преподаватель не поставил баллы.
-            </span>
-          </div>
-        )}
+        <div className="hint">
+          <Info size={16} />
+          <span>
+            Файл привяжется к доп. заданию и вашему профилю. Заменить его можно, пока
+            преподаватель не поставил баллы.
+          </span>
+        </div>
 
         {error ? <div className="error-box">{error}</div> : null}
 

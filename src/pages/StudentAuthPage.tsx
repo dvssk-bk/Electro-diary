@@ -164,7 +164,7 @@ export function StudentAuthPage() {
               <CheckCircle2 size={18} /> Журнал своей группы
             </li>
             <li>
-              <CheckCircle2 size={18} /> Загрузка файлов до 50 МБ
+              <CheckCircle2 size={18} /> Загрузка файлов до 15 МБ
             </li>
             <li>
               <CheckCircle2 size={18} /> Просмотр работ и замечаний онлайн

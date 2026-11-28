@@ -262,7 +262,7 @@ async function uploadFileToStorage(
       } catch {
         // ignore
       }
-      if (xhr.status === 413) message = 'Файл больше лимита хранилища (50 МБ).'
+      if (xhr.status === 413) message = 'Файл больше лимита хранилища (15 МБ).'
       if (xhr.status === 403) message = 'Загрузка запрещена: работа уже оценена или файл не разрешён.'
       reject(new Error(message))
     }

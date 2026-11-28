@@ -173,7 +173,7 @@ export function StudentExtraPage() {
                     onClick={() => setDetailsTarget(assignment)}
                   >
                     <div className="assignment-card__head">
-                      <span className="badge badge--orange">
+                      <span className="badge badge--blue">
                         <Sparkles size={12} /> Доп. задание
                       </span>
                       <span className="assignment-card__date">

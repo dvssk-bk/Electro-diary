@@ -412,7 +412,7 @@ export function AdminExtraPage() {
                     onClick={() => setDetailsTarget(assignment)}
                   >
                     <div className="extra-admin-card__top">
-                      <span className="badge badge--orange">
+                      <span className="badge badge--blue">
                         <Sparkles size={12} /> Доп. задание
                       </span>
                       <span className="muted">

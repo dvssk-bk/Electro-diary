@@ -6,7 +6,6 @@ import {
   MessageSquare,
   Paperclip,
   Replace,
-  TriangleAlert,
   UploadCloud,
   X,
 } from 'lucide-react'
@@ -68,7 +67,7 @@ export function SubmitDialog({
   const pickFile = (value: File | null | undefined) => {
     if (!value) return
     if (!isAcceptedFile(value)) {
-      setError('Неподдерживаемый формат файла. Выберите Office, PDF, TXT, ZIP, RAR или MP4.')
+      setError('Неподдерживаемый формат файла. Выберите Office, PDF, TXT, ZIP или RAR.')
       setFile(null)
       return
     }
@@ -131,7 +130,6 @@ export function SubmitDialog({
 
   if (!assignment) return null
   const kind = file ? fileKind(file.name) : null
-  const isVideo = file?.name.toLowerCase().endsWith('.mp4')
 
   return (
     <Modal
@@ -248,29 +246,19 @@ export function SubmitDialog({
               <strong>Перетащите файл сюда</strong>
               <span>или нажмите, чтобы выбрать на устройстве</span>
               <small>
-                Office, PDF, TXT, ZIP, RAR, MP4 · до {Math.round(uploadLimitBytes / 1024 / 1024)} МБ
+                Office, PDF, TXT, ZIP, RAR · до {Math.round(uploadLimitBytes / 1024 / 1024)} МБ
               </small>
             </div>
           )}
         </div>
 
-        {isVideo ? (
-          <div className="hint hint--amber">
-            <TriangleAlert size={16} />
-            <span>
-              Видео MP4 может быть большим. Лимит Supabase — 50 МБ: если файл не проходит,
-              сожмите видео или прикрепите ссылку внутри архива.
-            </span>
-          </div>
-        ) : (
-          <div className="hint">
-            <Info size={16} />
-            <span>
-              Текст ответа и файл привяжутся к заданию и вашему профилю. Изменить ответ можно,
-              пока преподаватель не поставил оценку.
-            </span>
-          </div>
-        )}
+        <div className="hint">
+          <Info size={16} />
+          <span>
+            Текст ответа и файл привяжутся к заданию и вашему профилю. Изменить ответ можно,
+            пока преподаватель не поставил оценку.
+          </span>
+        </div>
 
         {error ? (
           <div className="error-box" data-testid="submit-error">

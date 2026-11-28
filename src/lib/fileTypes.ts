@@ -31,7 +31,7 @@ const MAP: Record<string, FileKindInfo> = {
   txt: { label: 'TXT', accept: true, preview: 'txt', mime: 'text/plain' },
   zip: { label: 'ZIP', accept: true, preview: 'zip', mime: 'application/zip' },
   rar: { label: 'RAR', accept: true, preview: 'download', mime: 'application/vnd.rar' },
-  mp4: { label: 'MP4', accept: true, preview: 'video', mime: 'video/mp4' },
+  mp4: { label: 'MP4', accept: false, preview: 'video', mime: 'video/mp4' },
   png: { label: 'PNG', accept: true, preview: 'image', mime: 'image/png' },
   jpg: { label: 'JPG', accept: true, preview: 'image', mime: 'image/jpeg' },
   jpeg: { label: 'JPEG', accept: true, preview: 'image', mime: 'image/jpeg' },
@@ -80,7 +80,7 @@ export function sanitizeFileName(name: string): string {
 export function validateFile(file: File, limitBytes: number): string | null {
   const kind = fileKind(file.name)
   if (!kind.accept) {
-    return 'Неподдерживаемый формат. Разрешены: Office, PDF, TXT, ZIP, RAR и MP4.'
+    return 'Неподдерживаемый формат. Разрешены: Office, PDF, TXT, ZIP и RAR.'
   }
   if (file.size > limitBytes) {
     const mb = Math.round(limitBytes / 1024 / 1024)
