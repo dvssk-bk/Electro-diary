@@ -59,6 +59,16 @@ export const PROFILE_GRADIENTS = [
     css: 'linear-gradient(135deg, #f6ead3 0%, #fdf3df 55%, #f8e8da 100%)',
   },
   {
+    value: 'citrus',
+    label: 'Цитрус',
+    css: 'linear-gradient(135deg, #ffe0c2 0%, #ffd0a6 52%, #fff0e0 100%)',
+  },
+  {
+    value: 'ember',
+    label: 'Уголёк',
+    css: 'linear-gradient(135deg, #4a2414 0%, #7c3a16 55%, #2e1a12 100%)',
+  },
+  {
     value: 'graphite',
     label: 'Графит',
     css: 'linear-gradient(135deg, #445466 0%, #2f3d4d 55%, #53667a 100%)',

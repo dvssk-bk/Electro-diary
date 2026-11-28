@@ -36,6 +36,7 @@ const FRAME_PRESETS = [
   '#58a6ff',
   '#c77dff',
   '#ffa94d',
+  '#ff7a1a',
   '#1f7fa8',
   '#243b55',
 ]
